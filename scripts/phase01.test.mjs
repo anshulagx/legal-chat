@@ -43,6 +43,8 @@ async function launch(t, { limit = 20, secure = false } = {}) {
   const exited = once(app, 'exit');
   t.after(async () => {
     if (app.exitCode === null && app.signalCode === null) app.kill('SIGTERM');
+    // The fixture's message listener keeps IPC referenced after app shutdown.
+    if (app.connected) app.disconnect();
     await exited;
   });
 
