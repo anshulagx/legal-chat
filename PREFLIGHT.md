@@ -1,6 +1,6 @@
 # Environment preflight
 
-From the repository root, use Node 22 or newer and start Docker. Run `npm install` once to install the MongoDB and AWS SDKs. Copy `.env.example` to a private environment file if you do not already have one. Keep credential files ignored by Git.
+From the repository root, run `nvm use` to select the Node version in `.nvmrc`. If it is missing, run `nvm install` first. Start Docker and run `npm ci` to install the MongoDB and AWS SDKs. Copy `.env.example` to a private environment file if you do not already have one. Keep credential files ignored by Git.
 
 Set an OpenRouter spending cap before running the command below. The flag authorizes one small chat request and one embedding request per run. Without it, those checks report BLOCKED and no model requests are sent.
 
