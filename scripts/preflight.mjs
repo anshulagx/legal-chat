@@ -1,3 +1,4 @@
+import { accountValidators, integer, isConfigured, matchesUrl } from './account-validation.mjs';
 import { execFile } from 'node:child_process';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup, resolveSrv } from 'node:dns/promises';
@@ -58,32 +59,10 @@ function requireFields(...names) {
   if (missing.length) throw new CheckError('BLOCKED', `Resolve ${missing.join(', ')} first.`);
 }
 
-function urlMatches(value, schemes, originOnly = false) {
-  try {
-    const url = new URL(value);
-    return schemes.includes(url.protocol) && url.hostname && !url.username && !url.password
-      && (!originOnly || url.origin === value);
-  } catch {
-    return false;
-  }
-}
-
-function integer(value, min, max) {
-  return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) >= min && Number(value) <= max;
-}
-
 function validate(env, template) {
   const production = env.NODE_ENV === 'production';
   const validators = {
-    NODE_ENV: value => ['development', 'production', 'test'].includes(value),
-    APP_ORIGIN: value => urlMatches(value, production ? ['https:'] : ['http:', 'https:'], true),
-    PORT: value => integer(value, 1, 65535),
-    JWT_SECRET: value => Buffer.byteLength(value) >= 32,
-    JWT_TTL_SECONDS: value => integer(value, 1, Number.MAX_SAFE_INTEGER),
-    ADMIN_SEED_EMAIL: value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-    ADMIN_SEED_PASSWORD: value => Buffer.byteLength(value) <= 72,
-    MONGODB_URI: value => /^mongodb(?:\+srv)?:\/\/.+/.test(value) && !/<[^>]+>/.test(value),
-    MONGODB_DB_NAME: value => /^[a-zA-Z0-9_-]{1,63}$/.test(value),
+    ...accountValidators(production),
     AWS_REGION: value => /^[a-z]{2}(?:-[a-z]+)+-\d+$/.test(value),
     AWS_ACCESS_KEY_ID: value => /^(AKIA|ASIA)[A-Z0-9]{16}$/.test(value),
     AWS_SECRET_ACCESS_KEY: value => /^[A-Za-z0-9+/=]{40}$/.test(value),
@@ -94,7 +73,7 @@ function validate(env, template) {
     OPENROUTER_CHAT_MODEL: value => /^[\w.-]+\/[\w.:-]+$/.test(value),
     OPENROUTER_EMBEDDING_MODEL: value => /^[\w.-]+\/[\w.:-]+$/.test(value),
     OPENROUTER_EMBEDDING_DIMENSIONS: value => integer(value, 1, 8192),
-    LANGFUSE_BASE_URL: value => urlMatches(value.replace(/\/$/, ''), ['https:'], true),
+    LANGFUSE_BASE_URL: value => matchesUrl(value.replace(/\/$/, ''), ['https:'], true),
     LANGFUSE_PUBLIC_KEY: value => /^pk-lf-\S+$/.test(value),
     LANGFUSE_SECRET_KEY: value => /^sk-lf-\S+$/.test(value),
     LANGFUSE_TRACE_CONTENT: value => value === 'false' || (!production && value === 'true'),
@@ -104,7 +83,7 @@ function validate(env, template) {
     if (name === 'AWS_SESSION_TOKEN' && !value && !env.AWS_ACCESS_KEY_ID?.startsWith('ASIA')) {
       valid.add(name);
       report('PASS', name, 'Optional with a long-lived IAM access key.');
-    } else if (!value?.trim() || /^(?:your[_ -]|replace[_ -]|changeme$|<|\$\{)/i.test(value.trim())) {
+    } else if (!isConfigured(value)) {
       report('BLOCKED', name, 'Missing or placeholder.');
     } else {
       const validator = validators[name] ?? (name.endsWith('_LIMIT') || name.endsWith('_WINDOW_SECONDS')

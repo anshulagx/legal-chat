@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@source "./";
+
+@layer base {
+  body { @apply min-h-screen bg-[#fbfaf7] text-[#202927] antialiased; }
+  h1 { @apply text-4xl font-semibold tracking-tight; }
+  :focus-visible { @apply outline outline-2 outline-offset-4 outline-[#247065]; }
+  a { @apply font-semibold text-[#215a51] underline underline-offset-4; }
+}
+
+@layer components {
+  .brand { @apply inline-flex items-center gap-3 font-semibold tracking-tight; }
+  .brand-mark { @apply inline-grid h-9 w-9 place-items-center rounded-lg border border-current text-xs font-semibold tracking-wider; }
+  .auth-layout { @apply grid min-h-screen md:grid-cols-[minmax(15rem,2fr)_3fr]; }
+  .cover { @apply flex flex-col items-start gap-6 bg-[#17352f] p-7 text-[#faf6eb] md:justify-between md:p-12; }
+  .cover p { @apply max-w-sm font-serif text-2xl leading-tight md:pb-16 md:text-5xl; }
+  .auth-panel { @apply flex items-center justify-center px-7 py-12 md:py-16; }
+  .auth-form { @apply grid w-full max-w-sm gap-5; }
+  .auth-form h1 { @apply mb-3; }
+  .field { @apply grid gap-2; }
+  .field label { @apply text-sm font-semibold; }
+  .field input { @apply min-h-12 w-full rounded-lg border border-[#858f88] bg-white px-3 py-2; }
+  .field input[aria-invalid="true"] { @apply border-red-700; }
+  .error { @apply text-sm text-red-800; }
+  .primary { @apply min-h-12 rounded-lg bg-[#215a51] px-5 py-2 font-semibold text-white hover:bg-[#163e36]; }
+  .primary[aria-disabled="true"], .secondary[aria-disabled="true"] { @apply cursor-wait opacity-75; }
+  .switch { @apply text-sm text-[#4b5651]; }
+  .status-panel { @apply mx-auto grid max-w-md gap-5 px-7 py-16; }
+  .workspace-bar { @apply flex flex-wrap items-center justify-between gap-4 border-b border-[#d5ded7] px-6 py-4 md:px-12; }
+  .secondary { @apply min-h-11 rounded-lg border border-[#858f88] px-4 font-semibold hover:bg-[#f1f4ef]; }
+  .workspace-content { @apply mx-auto grid max-w-3xl gap-4 px-7 py-20 md:py-32; }
+  .account { @apply break-all text-[#4b5651]; }
+  .page-hidden .workspace-content { visibility: hidden; }
+}
