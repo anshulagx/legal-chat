@@ -23,11 +23,18 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
   const [retry, setRetry] = useState<SendBody>();
   const [historyOpen, setHistoryOpen] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const focusComposer = useRef(false);
   const viewVersion = useRef(0);
   const activeSend = useRef(false);
   const lifetime = useRef<AbortController>(new AbortController());
 
   useEffect(() => () => { lifetime.current.abort(); }, []);
+  useEffect(() => {
+    if (focusComposer.current && !sending && !retry && !loading) {
+      focusComposer.current = false;
+      textarea.current?.focus();
+    }
+  });
 
   async function request<T>(path: string, body?: SendBody): Promise<T> {
     const result = await fetch(path, { credentials: 'same-origin', cache: 'no-store', signal: lifetime.current.signal,
@@ -79,7 +86,7 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
     setProblem('');
     setHistoryOpen(false);
     setLoading(Boolean(conversationId));
-    if (!conversationId) { textarea.current?.focus(); return; }
+    if (!conversationId) { focusComposer.current = true; return; }
     try {
       const saved = await history(conversationId);
       if (version === viewVersion.current && !lifetime.current.signal.aborted) setMessages(saved);
@@ -116,7 +123,7 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
       setMessages(saved);
       setRetry(undefined);
       void loadConversations();
-      textarea.current?.focus();
+      focusComposer.current = true;
     } catch (error) {
       if (!lifetime.current.signal.aborted) setProblem(error instanceof Error ? error.message : 'Could not send your question. Retry to check whether it was saved.');
     } finally {
