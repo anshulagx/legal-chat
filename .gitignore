@@ -1,0 +1,5 @@
+# Never commit local credentials. Keep the placeholder template trackable.
+.env
+.env.*
+!.env.example
+node_modules/
