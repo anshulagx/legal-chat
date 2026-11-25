@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { UploadPanel } from './uploads';
 
 type Conversation = { id: string; title: string; updatedAt: string };
 type Message = {
@@ -9,7 +10,7 @@ type Page<T> = { items: T[]; nextCursor: string | null };
 type SendBody = { message: string; clientMessageId: string; conversationId?: string };
 type SendResult = { conversationId: string; userMessageId: string; attemptId: string; response: string; status: string };
 
-export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => void }) {
+export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionExpired: () => void; admin?: boolean }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>();
@@ -19,6 +20,7 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [problem, setProblem] = useState('');
   const [retry, setRetry] = useState<SendBody>();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -36,7 +38,7 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
     }
   });
 
-  async function request<T>(path: string, body?: SendBody): Promise<T> {
+  async function request<T>(path: string, body?: unknown): Promise<T> {
     const result = await fetch(path, { credentials: 'same-origin', cache: 'no-store', signal: lifetime.current.signal,
       ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
     if (result.status === 401) {
@@ -77,7 +79,7 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
   }
 
   async function select(conversationId?: string) {
-    if (activeSend.current) return;
+    if (activeSend.current || uploading) return;
     const version = ++viewVersion.current;
     setSelected(conversationId);
     setMessages([]);
@@ -134,7 +136,7 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (activeSend.current || loading || retry) return;
+    if (activeSend.current || uploading || loading || retry) return;
     if (!draft.trim() || draft.trim().length > 8000) {
       setProblem('Enter a question of at most 8,000 characters.');
       textarea.current?.focus();
@@ -148,11 +150,11 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
     <button type="button" className="secondary history-toggle" aria-expanded={historyOpen} aria-controls="chat-history"
       onClick={() => setHistoryOpen(open => !open)}>Previous chats</button>
     <aside id="chat-history" className={`chat-sidebar ${historyOpen ? 'is-open' : ''}`} aria-label="Previous chats">
-      <button type="button" className="secondary" disabled={sending} onClick={() => void select()}>New chat</button>
+      <button type="button" className="secondary" disabled={sending || uploading} onClick={() => void select()}>New chat</button>
       <h2>Previous chats</h2>
       <nav aria-label="Conversations">
         {conversations.map(conversation => <button type="button" key={conversation.id} className="thread-link"
-          aria-current={selected === conversation.id ? 'true' : undefined} disabled={sending}
+          aria-current={selected === conversation.id ? 'true' : undefined} disabled={sending || uploading}
           onClick={() => void select(conversation.id)}>{conversation.title}</button>)}
       </nav>
       {!listLoading && !listError && !conversations.length && <p>No previous chats yet.</p>}
@@ -181,8 +183,17 @@ export function ChatWorkspace({ onSessionExpired }: { onSessionExpired: () => vo
         <textarea ref={textarea} id="question" name="question" value={draft} rows={3} maxLength={8000}
           aria-describedby={problem ? 'chat-error' : undefined} disabled={loading || Boolean(retry)}
           placeholder="Ask a support question…" onChange={event => setDraft(event.target.value)} />
-        <button type="submit" className="primary" disabled={sending || loading || Boolean(retry)}>Send question</button>
+        <button type="submit" className="primary" disabled={sending || uploading || loading || Boolean(retry)}>Send question</button>
       </form>
+      <UploadPanel conversationId={selected} onSessionExpired={onSessionExpired} onBusy={setUploading} disabled={sending || loading || Boolean(retry)}
+        ensureConversation={async () => {
+          const conversation = await request<Conversation>('/conversations', {});
+          setSelected(conversation.id);
+          return conversation.id;
+        }} onChanged={() => void loadConversations()} />
+      {admin && <details className="admin-uploads"><summary>Manage shared documents</summary>
+        <UploadPanel shared onSessionExpired={onSessionExpired} />
+      </details>}
     </main>
   </div>;
 }

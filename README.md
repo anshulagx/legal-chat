@@ -1,6 +1,6 @@
 # Legal Support Chat
 
-## Run Phases 01–02
+## Run Phases 01–03
 
 Use Node 22.22.0 (see `.nvmrc`) and a development MongoDB replica set or Atlas database. Copy
 `.env.example` to `.env` if you do not already have it. For Phase 01 the
@@ -31,7 +31,7 @@ To load a private file for a local production-mode run, use
 env files out of version control and the browser bundle.
 
 `/health/live` returns 200 while the listener is alive. `/health/ready` returns
-200 once account indexes and the admin seed are ready and MongoDB replies to a
+200 once indexes and the admin seed are ready and MongoDB replies to a
 ping. Readiness returns 503 when the database is unavailable. Request logs
 contain the generated request ID, method, response status and duration.
 
@@ -144,3 +144,110 @@ controls exist only in `scripts/phase02-fixture.mjs` and its IPC channel;
 can select or control it. Keep QA credentials and cookie values out of evidence.
 
 Implementation reference: [Mongoose 8 transactions](https://mongoosejs.com/docs/8.x/docs/transactions.html).
+
+## Phase 03 direct file uploads
+
+Customers can attach up to five PDF or UTF-8 text originals to each chat. Each
+file may contain 1 byte through 5 MiB. The first attachment creates a thread.
+The file picker transfers multipart bytes directly to private Amazon S3,
+shows progress, and then calls the metadata-only completion endpoint. Reopening
+a chat restores its attachments. Admins have a separate shared-document upload
+panel. Queued means the exact original is saved; extraction/indexing starts in
+Phase 04. PDFs must eventually pass its 50-page/digital-text validation.
+
+Download fictional [agreement](client/public/fixtures/agreement.pdf) and
+[amendment](client/public/fixtures/amendment.txt) fixtures from the upload panel.
+Their notice periods differ: 30 and 60 days. They are test documents.
+
+Configure the existing `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+conditional `AWS_SESSION_TOKEN`, `S3_BUCKET`, `S3_KEY_PREFIX`,
+`UPLOAD_RESERVATION_LIMIT` and `UPLOAD_RESERVATION_WINDOW_SECONDS` settings.
+An app without any upload settings keeps auth/chat available and returns 503
+for storage-dependent mutations. Partial settings fail startup validation.
+When configured, readiness also requires bucket versioning, all four Block
+Public Access settings and exact `APP_ORIGIN` CORS for GET/POST. The app neither
+creates buckets nor changes bucket policies or CORS. Allow the browser origin
+and `content-type` header in bucket CORS. No exposed VersionId header is needed:
+the server captures the object version through HEAD. CSP permits direct XHR
+only to the configured regional bucket hostname and the application origin.
+
+The supplied identity needs scoped object POST/write, Head/GetObject,
+GetObjectVersion, ListBucketVersions and DeleteObjectVersion for the application
+prefix, plus read access to the three bucket configuration checks. Use distinct
+development/production prefixes and identities. Do not apply an expiry lifecycle
+to pinned originals. No originals are stored on the web service's local disk.
+
+| Route | Contract |
+| --- | --- |
+| `POST /conversations/:id/attachments` | `{filename,mime,size,clientUploadId}` reserves an owned slot; returns 201 with uploadId/versionId, expiry and signed `form: {url,fields}` while reserved. |
+| `GET /conversations/:id/attachments` | Owned filename/type/size/state/checksum metadata. Another account receives 404. |
+| `POST /admin/documents` | Same reservation body for a new shared document. Customer receives 403. |
+| `GET /admin/documents` | Admin-only shared upload list. |
+| `POST /uploads/:uploadId/complete` | Metadata only. Returns 202, pinned version metadata and `queued`. Duplicate/concurrent calls return the same winner. |
+
+Always retry a reservation with its original `clientUploadId` and input; a
+changed payload returns 409. Repeated reservations do not consume extra slots
+or rate-limit attempts. New reservations count against the per-user configured
+limit and return 429 with Retry-After when exceeded. Unsupported MIME is 415;
+declared oversize is 413; S3 independently enforces the signed MIME, exact key
+and 1-byte–5-MiB policy. Completion checks observed size/MIME and hashes an
+explicit S3 VersionId, then atomically pins that version and creates one queued
+job. Reusing the still-valid form can create another S3 version but cannot
+replace a pinned original. `readPinnedOriginal` is the Phase 04 worker-input
+boundary: it reads the recorded VersionId and verifies SHA-256 before returning
+bytes.
+
+Forms expire within five minutes and retries never extend the reservation's
+original deadline. A background pass runs every minute, with bounded batches.
+It reconciles bytes received without a completion callback before expiring an
+empty reservation and releasing its slot exactly once. An expired empty upload
+requires a new ID. A one-hour grace period precedes deletion of abandoned or
+replayed extra versions. Cleanup deletes only explicit, unpinned S3 versions;
+it checks for live reservations/pinned references, retains queued originals,
+and keeps terminal MongoDB rows indefinitely for idempotency and orphan tracking.
+New reservation requests reconcile only their owner's expired reservations;
+global garbage collection runs in the background. Transient storage failures
+retain records/slots for a later pass.
+
+## Phase 03 QA
+
+Use the isolated replica set described above, then run:
+
+```sh
+npm ci
+npm run build
+npm run test:wave-03
+```
+
+This default suite uses a local versioned storage emulator injected only into a
+test fixture. It asserts duplicate completion, form replay, real transaction
+quota races, oversized/type-invalid posts, expiry reconciliation/slot recovery,
+ownership, admin roles and rate limiting. It also tests two duplicate
+reservations racing for the final slot. Emulator results do not establish AWS
+or browser-CORS compatibility.
+
+For the required real S3 gate, provide `QA_S3_ENV_FILE` pointing to an ignored,
+private environment file with explicit *development/test* AWS settings, an
+isolated `S3_KEY_PREFIX` ending `/`, approved `APP_ORIGIN`, and QA MongoDB URI:
+
+```sh
+QA_S3_ENV_FILE=/private/tmp/legal-chat-phase03.qa.env npm run test:wave-03
+```
+
+The runner reads selected settings without printing them, uses a unique
+subprefix and database for each run, stops fixtures, then deletes only that
+run's explicit object versions and database. It never loads production files
+implicitly or modifies bucket configuration. Do not use a production identity
+or production prefix. The real suite posts to S3 and asserts policy rejection,
+private originals and immutable version reads. Use Chrome at the exact CORS
+origin to complete the separate QA guide's Network observation, recording only
+method, hostname, status and transfer size. Keep cookies, signed fields and
+provider credentials out of recordings.
+
+Test-only IPC controls in `scripts/phase03-fixture.mjs` advance the application
+clock, run cleanup and read checksums of pinned/latest originals. They are not
+HTTP endpoints, and storage/clock injection rejects non-test execution. Run
+`test:phase01` and `test:wave-02` as regressions on the same isolated replica set.
+
+References: [AWS signed POST SDK](https://github.com/aws/aws-sdk-js-v3/tree/main/packages/s3-presigned-post)
+and [S3 version-specific reads](https://docs.aws.amazon.com/AmazonS3/latest/userguide/RetrievingObjectVersions.html).

@@ -223,7 +223,7 @@ function App() {
         <p className="account">Signed in as {profile.email}</p>
         {failure && <p className="error" role="alert">{failure}</p>}
       </div>
-      <ChatWorkspace key={profile.id} onSessionExpired={() => { setProfile(null); navigate('/login', true); }} />
+      <ChatWorkspace key={profile.id} admin={profile.role === 'admin'} onSessionExpired={() => { setProfile(null); navigate('/login', true); }} />
     </div>
   );
 }

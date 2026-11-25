@@ -7,6 +7,8 @@ import { initializeAccounts } from './accounts.ts';
 import { authRouter } from './auth.ts';
 import { chatRouter } from './chat.ts';
 import { initializeConversations } from './conversations.ts';
+import { cleanupUploads, initializeUploads, uploadRouter } from './uploads.ts';
+import { createStorage } from './storage.ts';
 import { readConfig } from './config.ts';
 import { errorHandler, HttpError, requestMetadata } from './http.ts';
 
@@ -20,6 +22,8 @@ try {
 
 const app = express();
 const currentConfig = config;
+const storage = createStorage(config);
+const storageOrigin = config.storage ? `https://${config.storage.bucket}.s3.${config.storage.region}.amazonaws.com` : '';
 const assets = fileURLToPath(new URL('../../client/dist/', import.meta.url));
 let initialized = false;
 let stopping = false;
@@ -29,7 +33,7 @@ app.disable('x-powered-by');
 app.set('trust proxy', config.trustedProxy);
 app.use(requestMetadata, (_req, res, next) => {
   res.set({
-    'Content-Security-Policy': "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    'Content-Security-Policy': `default-src 'self'; connect-src 'self' ${storageOrigin}; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
   });
@@ -51,10 +55,12 @@ app.get('/health/ready', async (_req, res) => {
 });
 app.use('/auth', authRouter(config, available));
 app.use(chatRouter(config, available));
+app.use(uploadRouter(config, available, storage));
 app.get(['/', '/login', '/signup', '/app'], (_req, res) => {
   res.set('Cache-Control', 'no-store').sendFile(resolve(assets, 'index.html'));
 });
 app.use('/assets', express.static(resolve(assets, 'assets'), { index: false, immutable: true, maxAge: '1y' }));
+app.use('/fixtures', express.static(resolve(assets, 'fixtures'), { index: false, setHeaders: res => res.setHeader('Content-Disposition', 'attachment') }));
 app.use((_req, _res, next) => next(new HttpError(404, 'NOT_FOUND', 'This page could not be found.')));
 app.use(errorHandler);
 
@@ -72,6 +78,8 @@ async function connectDatabase() {
       await mongoose.connect(currentConfig.mongoUri, { dbName: currentConfig.database, serverSelectionTimeoutMS: 3000 });
       await initializeAccounts(currentConfig);
       await initializeConversations();
+      await initializeUploads();
+      if (storage) await storage.verify(currentConfig.origin);
       initialized = true;
       console.info(JSON.stringify({ event: 'accounts_ready' }));
     } catch {
@@ -81,10 +89,17 @@ async function connectDatabase() {
   }
 }
 void connectDatabase();
+let cleaning = false;
+const cleanupTimer = setInterval(() => {
+  if (!storage || !available() || cleaning) return;
+  cleaning = true;
+  void cleanupUploads(storage).catch(() => console.error(JSON.stringify({ event: 'upload_cleanup_unavailable' }))).finally(() => { cleaning = false; });
+}, 60000).unref();
 
 async function shutdown() {
   if (stopping) return;
   stopping = true;
+  clearInterval(cleanupTimer);
   const deadline = setTimeout(() => process.exit(1), 5000).unref();
   await new Promise<void>(done => server.close(() => done()));
   await mongoose.disconnect();

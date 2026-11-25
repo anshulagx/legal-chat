@@ -13,11 +13,10 @@
     "build:client": "tsc -p client/tsconfig.json && vite build client",
     "start": "node server/dist/index.js",
     "test:phase01": "node --test scripts/phase01.test.mjs",
-    "test:wave-02": "node --test scripts/phase02.test.mjs"
+    "test:wave-02": "node --test scripts/phase02.test.mjs",
+    "test:wave-03": "node --test scripts/phase03.test.mjs"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.0.0",
-    "@aws-sdk/s3-presigned-post": "^3.0.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -30,6 +29,8 @@
     "vite": "^8.0.13"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-presigned-post": "^3.0.0",
     "bcryptjs": "^3.0.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",

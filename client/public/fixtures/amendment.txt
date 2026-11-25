@@ -1,0 +1,16 @@
+FICTIONAL DOCUMENT - FOR PRODUCT TESTING ONLY
+Amendment No. 1 to Workspace Services Agreement
+Agreement reference: LSC-DEMO-001
+Amendment effective date: 1 March 2026
+
+Parties
+Cedar Sample Services Ltd. (Provider) and Harbor Example Studio Ltd. (Customer).
+
+1. Replacement of clause 2: Term and termination
+Clause 2 of the agreement dated 1 January 2026 is replaced in full as follows:
+Either party may terminate this agreement by giving the other party at least 60 days' written notice.
+
+2. Unchanged terms
+All other clauses of Agreement LSC-DEMO-001 remain unchanged. In particular, the export option remains available for 14 days after termination.
+
+Test fixture only. All parties and terms are fictional; no customer information is included.
