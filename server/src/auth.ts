@@ -26,9 +26,55 @@ function profile(account: Account) {
   return { id: account.id, email: account.emailNormalized, role: account.role };
 }
 
+function cookieName(config: Config) {
+  return config.secureCookie ? '__Host-legal_session' : 'legal_session';
+}
+
+function sessionIdentity(req: Request, config: Config) {
+  const name = cookieName(config);
+  const value = req.headers.cookie?.split(';').map(part => part.trim())
+    .find(part => part.startsWith(`${name}=`))?.slice(name.length + 1);
+  if (!value) return null;
+  try {
+    const claims = jwt.verify(value, config.secret, {
+      algorithms: ['HS256'], issuer: config.issuer, audience: config.audience,
+    });
+    if (typeof claims === 'string' || typeof claims.exp !== 'number'
+      || typeof claims.sub !== 'string' || !objectId.test(claims.sub)
+      || typeof claims.jti !== 'string' || !objectId.test(claims.jti)) return null;
+    return { _id: claims.jti, userId: claims.sub };
+  } catch {
+    return null;
+  }
+}
+
+export function requestGuard(config: Config, available: () => boolean): express.RequestHandler {
+  return (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.get('Origin') !== config.origin) {
+      return next(new HttpError(403, 'INVALID_ORIGIN', 'This request must originate from the app.'));
+    }
+    if (!available()) return next(new HttpError(503, 'UNAVAILABLE', 'Services are temporarily unavailable.'));
+    next();
+  };
+}
+
+export function requireSession(config: Config): express.RequestHandler {
+  return async (req, res, next) => {
+    const identity = sessionIdentity(req, config);
+    if (!identity || !await Session.exists({ ...identity, revokedAt: null, expiresAt: { $gt: new Date() } })) {
+      throw unauthorized();
+    }
+    const account = await User.findById(identity.userId);
+    if (!account) throw unauthorized();
+    res.locals.account = profile(account);
+    next();
+  };
+}
+
 export function authRouter(config: Config, available: () => boolean) {
   const router = express.Router();
-  const name = config.secureCookie ? '__Host-legal_session' : 'legal_session';
+  const name = cookieName(config);
   const cookie = { httpOnly: true, sameSite: 'lax', path: '/', secure: config.secureCookie } as const;
 
   const limiter = rateLimit({
@@ -56,31 +102,7 @@ export function authRouter(config: Config, available: () => boolean) {
     res.status(status).json(profile(account));
   }
 
-  function sessionIdentity(req: Request) {
-    const value = req.headers.cookie?.split(';').map(part => part.trim())
-      .find(part => part.startsWith(`${name}=`))?.slice(name.length + 1);
-    if (!value) return null;
-    try {
-      const claims = jwt.verify(value, config.secret, {
-        algorithms: ['HS256'], issuer: config.issuer, audience: config.audience,
-      });
-      if (typeof claims === 'string' || typeof claims.exp !== 'number'
-        || typeof claims.sub !== 'string' || !objectId.test(claims.sub)
-        || typeof claims.jti !== 'string' || !objectId.test(claims.jti)) return null;
-      return { _id: claims.jti, userId: claims.sub };
-    } catch {
-      return null;
-    }
-  }
-
-  router.use((req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.get('Origin') !== config.origin) {
-      return next(new HttpError(403, 'INVALID_ORIGIN', 'This request must originate from the app.'));
-    }
-    if (!available()) return next(new HttpError(503, 'UNAVAILABLE', 'Account services are temporarily unavailable.'));
-    next();
-  });
+  router.use(requestGuard(config, available));
 
   const json = express.json({ limit: '4kb' });
   router.post('/signup', limiter, json, async (req, res) => {
@@ -110,18 +132,12 @@ export function authRouter(config: Config, available: () => boolean) {
     await issueSession(account, res, 200);
   });
 
-  router.get('/me', async (req, res) => {
-    const identity = sessionIdentity(req);
-    if (!identity || !await Session.exists({ ...identity, revokedAt: null, expiresAt: { $gt: new Date() } })) {
-      throw unauthorized();
-    }
-    const account = await User.findById(identity.userId);
-    if (!account) throw unauthorized();
-    res.json(profile(account));
+  router.get('/me', requireSession(config), (_req, res) => {
+    res.json(res.locals.account);
   });
 
   router.post('/logout', async (req, res) => {
-    const identity = sessionIdentity(req);
+    const identity = sessionIdentity(req, config);
     if (identity) await Session.updateOne({ ...identity, revokedAt: null }, { $set: { revokedAt: new Date() } });
     res.clearCookie(name, cookie).status(204).end();
   });

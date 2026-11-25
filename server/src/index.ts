@@ -5,6 +5,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { initializeAccounts } from './accounts.ts';
 import { authRouter } from './auth.ts';
+import { chatRouter } from './chat.ts';
+import { initializeConversations } from './conversations.ts';
 import { readConfig } from './config.ts';
 import { errorHandler, HttpError, requestMetadata } from './http.ts';
 
@@ -48,6 +50,7 @@ app.get('/health/ready', async (_req, res) => {
   res.status(503).json({ status: 'unavailable' });
 });
 app.use('/auth', authRouter(config, available));
+app.use(chatRouter(config, available));
 app.get(['/', '/login', '/signup', '/app'], (_req, res) => {
   res.set('Cache-Control', 'no-store').sendFile(resolve(assets, 'index.html'));
 });
@@ -68,6 +71,7 @@ async function connectDatabase() {
     try {
       await mongoose.connect(currentConfig.mongoUri, { dbName: currentConfig.database, serverSelectionTimeoutMS: 3000 });
       await initializeAccounts(currentConfig);
+      await initializeConversations();
       initialized = true;
       console.info(JSON.stringify({ event: 'accounts_ready' }));
     } catch {

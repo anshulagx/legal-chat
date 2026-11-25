@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import { ChatWorkspace } from './chat';
 
 type Profile = { id: string; email: string; role: 'customer' | 'admin' };
 type Problem = { message: string; fields?: Record<string, string>; retryAfterSeconds?: number };
@@ -217,11 +218,12 @@ function App() {
           {loggingOut ? 'Logging out…' : 'Log out'}
         </button>
       </header>
-      <main className="workspace-content">
-        <h1 tabIndex={-1} ref={viewHeading}>{profile.role === 'admin' ? 'Admin workspace' : 'Support workspace'}</h1>
+      <div className="workspace-account">
+        <h2 tabIndex={-1} ref={viewHeading}>{profile.role === 'admin' ? 'Admin workspace' : 'Support workspace'}</h2>
         <p className="account">Signed in as {profile.email}</p>
         {failure && <p className="error" role="alert">{failure}</p>}
-      </main>
+      </div>
+      <ChatWorkspace key={profile.id} onSessionExpired={() => { setProfile(null); navigate('/login', true); }} />
     </div>
   );
 }

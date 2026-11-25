@@ -12,7 +12,8 @@
     "build": "npm run build:client && tsc -p server/tsconfig.json",
     "build:client": "tsc -p client/tsconfig.json && vite build client",
     "start": "node server/dist/index.js",
-    "test:phase01": "node --test scripts/phase01.test.mjs"
+    "test:phase01": "node --test scripts/phase01.test.mjs",
+    "test:wave-02": "node --test scripts/phase02.test.mjs"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
