@@ -167,7 +167,8 @@ test('Phase 01 service checks', async t => {
     await t.test('01.1 disconnect turns readiness unhealthy and preserves liveness', async () => {
       const message = once(first.app, 'message', { signal: AbortSignal.timeout(5000) });
       first.app.send('disconnect-database');
-      assert.deepEqual(await message, ['database-disconnected']);
+      const [notification] = await message;
+      assert.equal(notification, 'database-disconnected');
       const ready = await call('/health/ready');
       assert.equal(ready.status, 503);
       assert.deepEqual(await ready.json(), { status: 'unavailable' });
