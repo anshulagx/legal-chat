@@ -185,3 +185,21 @@ test('bounded correction keeps earlier streamed paragraphs stable and persists n
     setTestGroundedProvider(undefined); setTestRetrievalBranches(undefined);
   }
 });
+
+test('query embedding request honors an already expired answer deadline', async () => {
+  const { createIndexProviders } = await import('../server/dist/index-providers.js');
+  const previousFetch = globalThis.fetch;
+  const deadline = new AbortController();
+  deadline.abort(new Error('Fictional answer deadline'));
+  let observedSignal;
+  globalThis.fetch = async (_url, options) => {
+    observedSignal = options.signal;
+    options.signal.throwIfAborted();
+    throw new Error('An expired request must not reach the provider.');
+  };
+  try {
+    await assert.rejects(createIndexProviders().embed(['fictional query'], { apiKey: 'fixture-key', model: 'fixture/embed', dimensions: 2 }, deadline.signal), /embedding provider could not be reached/i);
+    assert.equal(observedSignal.aborted, true);
+    assert.equal(observedSignal.reason, deadline.signal.reason);
+  } finally { globalThis.fetch = previousFetch; }
+});

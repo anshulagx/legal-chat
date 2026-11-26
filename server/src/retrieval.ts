@@ -70,7 +70,7 @@ async function vector(query: string, versions: SnapshotVersion[], config: Config
   const results = await Promise.all([...groups.values()].map(async group => {
     const first = group[0];
     if (!first.model || !Number.isSafeInteger(first.dimensions)) throw new Error('The snapshot embedding configuration is invalid.');
-    const [embedding] = await createIndexProviders().embed([query], { ...embeddingConfig, model: first.model, dimensions: first.dimensions });
+    const [embedding] = await createIndexProviders().embed([query], { ...embeddingConfig, model: first.model, dimensions: first.dimensions }, signal);
     signal?.throwIfAborted();
     const cursor = Chunk.collection.aggregate<SearchHit>([{ $vectorSearch: { index: vectorIndexName(first.dimensions), path: vectorField(first.dimensions), queryVector: embedding,
       numCandidates: 100, limit: 20, filter: { $or: group.map(version => ({ $and: [{ versionId: { $eq: version.versionId } }, { generation: { $eq: version.generation } }] })) } } },

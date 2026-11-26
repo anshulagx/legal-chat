@@ -5,7 +5,7 @@ import { ProcessingError } from './extraction.ts';
 
 export type IndexConfig = NonNullable<Config['indexing']>;
 export interface IndexProviders {
-  embed(texts: string[], config: IndexConfig): Promise<number[][]>;
+  embed(texts: string[], config: IndexConfig, signal?: AbortSignal): Promise<number[][]>;
   ensure(config: IndexConfig): Promise<void>;
   probe(versionId: string, generation: string, config: IndexConfig, expected: { id: string; text: string; vector: number[] }[]): Promise<void>;
 }
@@ -39,13 +39,13 @@ export function assertVectors(vectors: unknown, count: number, dimensions: numbe
 export function createIndexProviders(): IndexProviders {
   if (testProviders) return testProviders;
   return {
-    async embed(texts, config) {
+    async embed(texts, config, signal) {
       let response;
       try {
         response = await fetch('https://openrouter.ai/api/v1/embeddings', {
           method: 'POST', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: config.model, dimensions: config.dimensions, input: texts, encoding_format: 'float' }),
-          signal: AbortSignal.timeout(30000),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
         });
       } catch { throw new ProcessingError('EMBEDDING_UNAVAILABLE', 'The embedding provider could not be reached. Retry this pinned version shortly.', true, 5000); }
       if (!response.ok) {
