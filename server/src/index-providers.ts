@@ -17,6 +17,18 @@ export function setTestIndexProviders(providers: IndexProviders) {
 export const vectorField = (dimensions: number) => `vectors.d${dimensions}`;
 export const vectorIndexName = (dimensions: number) => `legal_vector_${dimensions}`;
 export const textIndexName = 'legal_text';
+async function withinBudget<T>(deadline: number, run: (milliseconds: number, signal: AbortSignal) => Promise<T>): Promise<T> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new Error('Index readiness deadline.');
+  const signal = AbortSignal.timeout(remaining);
+  let onAbort: (() => void) | undefined;
+  try {
+    return await Promise.race([run(remaining, signal), new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(signal.reason);
+      if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
+    })]);
+  } finally { if (onAbort) signal.removeEventListener('abort', onAbort); }
+}
 export function assertVectors(vectors: unknown, count: number, dimensions: number): asserts vectors is number[][] {
   if (!Array.isArray(vectors) || vectors.length !== count || vectors.some(vector => !Array.isArray(vector)
     || vector.length !== dimensions || vector.some(value => typeof value !== 'number' || !Number.isFinite(value)) || vector.every(value => value === 0))) {
@@ -57,6 +69,13 @@ export function createIndexProviders(): IndexProviders {
       return vectors;
     },
     async ensure(config) {
+      const deadline = Date.now() + config.indexWaitMs;
+      const list = (name?: string) => withinBudget(deadline, async (remaining, signal) => {
+        const options = { maxTimeMS: Math.min(15000, remaining), timeoutMS: remaining, signal };
+        const cursor = name ? Chunk.collection.listSearchIndexes(name, options) : Chunk.collection.listSearchIndexes(options);
+        try { return await cursor.toArray() as any[]; }
+        finally { void Promise.resolve(cursor.close()).catch(() => undefined); }
+      });
       const definitions = [
         { name: textIndexName, type: 'search' as const, definition: { mappings: { dynamic: false, fields: {
           searchText: { type: 'string' }, versionId: { type: 'token' }, generation: { type: 'token' }, chunkId: { type: 'token' },
@@ -67,13 +86,16 @@ export function createIndexProviders(): IndexProviders {
         ] } },
       ];
       try {
-        const current: any[] = await Chunk.collection.listSearchIndexes().toArray();
+        const current = await list();
         for (const definition of definitions) {
           const existing = current.find(index => index.name === definition.name);
           if (!existing) {
-            try { await Chunk.collection.createSearchIndex(definition); }
+            // The installed driver's createSearchIndex API has no operation
+            // options. Bound the await; cursor reads below also receive native
+            // server/client deadlines and cancellation signals.
+            try { await withinBudget(deadline, () => Chunk.collection.createSearchIndex(definition)); }
             catch (error) {
-              const again = await Chunk.collection.listSearchIndexes(definition.name).toArray();
+              const again = await list(definition.name);
               if (!again.length) throw error;
             }
           } else {
@@ -89,13 +111,12 @@ export function createIndexProviders(): IndexProviders {
             }
           }
         }
-        const deadline = Date.now() + config.indexWaitMs;
         while (true) {
-          const indexes: any[] = await Chunk.collection.listSearchIndexes().toArray();
+          const indexes = await list();
           if (indexes.some(index => definitions.some(d => d.name === index.name) && index.status === 'FAILED')) throw new Error('Index build failed');
-          if (definitions.every(d => indexes.some(index => index.name === d.name && index.queryable))) return;
           if (Date.now() >= deadline) throw new Error('Index readiness deadline');
-          await delay(1500);
+          if (definitions.every(d => indexes.some(index => index.name === d.name && index.queryable))) return;
+          await delay(Math.min(1500, Math.max(1, deadline - Date.now())));
         }
       } catch { throw new ProcessingError('SEARCH_INDEX_UNAVAILABLE', 'Text and vector search indexes are not ready. Check Atlas permissions, index definitions and the cluster index quota, then retry.', true, 5000); }
     },
@@ -105,20 +126,35 @@ export function createIndexProviders(): IndexProviders {
         let passed = true;
         try {
           for (const chunk of expected) {
-            const [keyword, vector] = await Promise.all([
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) { passed = false; break; }
+            const signal = AbortSignal.timeout(remaining);
+            const cursors = [
               Chunk.collection.aggregate([{ $search: { index: textIndexName, compound: {
                 must: [{ text: { query: chunk.text, path: 'searchText' } }],
                 filter: [{ equals: { path: 'versionId', value: versionId } }, { equals: { path: 'generation', value: generation } }, { equals: { path: 'chunkId', value: chunk.id } }],
-              } } }, { $limit: 2 }, { $project: { _id: 1, versionId: 1, generation: 1 } }], { maxTimeMS: 15000 }).toArray(),
+              } } }, { $limit: 2 }, { $project: { _id: 1, versionId: 1, generation: 1 } }], { maxTimeMS: Math.min(15000, remaining), signal }),
               Chunk.collection.aggregate([{ $vectorSearch: { index: vectorIndexName(config.dimensions), path: vectorField(config.dimensions), queryVector: chunk.vector,
-                numCandidates: 10, limit: 2, filter: { versionId, generation, chunkId: chunk.id } } }, { $project: { _id: 1, versionId: 1, generation: 1 } }], { maxTimeMS: 15000 }).toArray(),
-            ]);
+                numCandidates: 10, limit: 2, filter: { versionId, generation, chunkId: chunk.id } } }, { $project: { _id: 1, versionId: 1, generation: 1 } }], { maxTimeMS: Math.min(15000, remaining), signal }),
+            ];
+            let onAbort: (() => void) | undefined;
+            let rows: any[][];
+            try {
+              rows = await Promise.race([Promise.all(cursors.map(cursor => cursor.toArray())), new Promise<never>((_resolve, reject) => {
+                onAbort = () => reject(signal.reason);
+                if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
+              })]);
+            } finally {
+              if (onAbort) signal.removeEventListener('abort', onAbort);
+              for (const cursor of cursors) void Promise.resolve(cursor.close()).catch(() => undefined);
+            }
+            const [keyword, vector] = rows;
             if (![keyword, vector].every(rows => rows.some(row => row._id === chunk.id) && rows.every(row => row.versionId === versionId && row.generation === generation))) { passed = false; break; }
           }
         } catch { passed = false; }
-        if (passed) return;
+        if (passed && Date.now() < deadline) return;
         if (Date.now() >= deadline) throw new ProcessingError('SEARCH_PROBE_FAILED', 'The version is not queryable in both filtered search branches yet. Retry after checking Atlas indexing.', true, 5000);
-        await delay(1500);
+        await delay(Math.min(1500, Math.max(1, deadline - Date.now())));
       }
     },
   };

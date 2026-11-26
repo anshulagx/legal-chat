@@ -102,6 +102,25 @@ test(`Phase 04 indexing and publication (${real?'live Atlas/OpenRouter/S3':'isol
       assert.ok(longChunks.slice(1).some((chunk,i)=>chunk.anchors.some(a=>longChunks[i].anchors.some(b=>a.passageId===b.passageId&&a.start<b.end&&a.end>b.start))),'Long-clause fragments retain positive overlap');
       assert.equal((await extractOriginal(bytes(Array.from({length:10000},(_,i)=>`Heading ${i}`).join('\n')),'text/plain')).length,10000);
     });
+    await t.test('filtered search readiness rejects even successful query results after the overall probe deadline',async()=>{
+      const original=Chunk.collection.aggregate;let closed=0,calls=0;
+      Chunk.collection.aggregate=function(pipeline,options){
+        const scope=pipeline[0].$search?.compound.filter;
+        const id=scope?scope.find(item=>item.equals.path==='chunkId').equals.value:pipeline[0].$vectorSearch.filter.chunkId;
+        assert.ok(options.maxTimeMS<=40);assert.ok(options.signal instanceof AbortSignal);calls++;
+        return{async toArray(){await delay(25);return[{_id:id,versionId:'probe-version',generation:'probe-generation'}];},async close(){closed++;}};
+      };
+      const started=Date.now();
+      try{await assert.rejects(createIndexProviders().probe('probe-version','probe-generation',{...localConfig,indexWaitMs:40},Array.from({length:5},(_,i)=>({id:`chunk${i}`,text:'query',vector:[1]}))),error=>error.code==='SEARCH_PROBE_FAILED');}
+      finally{Chunk.collection.aggregate=original;}
+      assert.ok(Date.now()-started<120,'Probe aborts outstanding reads instead of waiting for all five pairs');assert.ok(calls<10);assert.equal(closed,calls);
+    });
+    await t.test('search index metadata visibility cannot return success after its readiness window',async()=>{
+      const original=Chunk.collection.listSearchIndexes;let closed=0;
+      Chunk.collection.listSearchIndexes=function(options){assert.ok(options.signal instanceof AbortSignal);return{async toArray(){await delay(60);return[{name:'legal_text',queryable:true},{name:'legal_vector_8',queryable:true}];},async close(){closed++;}};};
+      const started=Date.now();try{await assert.rejects(createIndexProviders().ensure({...localConfig,indexWaitMs:40}),error=>error.code==='SEARCH_INDEX_UNAVAILABLE');}finally{Chunk.collection.listSearchIndexes=original;}
+      assert.ok(Date.now()-started<100);await delay(30);assert.equal(closed,1);
+    });
     await t.test('04.2 malformed files, encrypted, image-only, 51-page PDFs and invalid UTF-8 fail actionably',async()=>{
       for(const [name,code]of [['malformed.pdf','MALFORMED_PDF'],['encrypted.pdf','ENCRYPTED_PDF'],['image-only.pdf','NO_TEXT'],['fifty-one-pages.pdf','PDF_PAGE_LIMIT']]){
         const version=await seed(await fixture(name),{mime:'application/pdf'});const result=await runVersion(worker,version.id);assert.equal(result.state,'failed',name);assert.equal(result.failureCode,code,name);assert.ok(result.failureReason.length>10);assert.equal(await Passage.countDocuments({versionId:version.id}),0);
