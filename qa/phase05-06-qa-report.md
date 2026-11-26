@@ -1,13 +1,13 @@
 # Phase 05–06 implementation QA
 
-Reviewed on 26 November 2026. Independent QA subagent exercised the shared implementation working tree based on `5e2ada52a788dfcda5f503f5f771fe760d620366`; frozen-candidate verification is recorded below when available. Node 22.22.0, local isolated MongoDB replica set, separate fictional customer A/customer B/admin sessions. Deterministic provider and storage injection is restricted to `NODE_ENV=test`. Live retrieval and model trials are separate from those deterministic tests.
+Reviewed on 26 November 2026. Independent QA subagent verified committed code candidate **`6e56864e98d68c73c7b7eee9ca46dcea0a7e664e`** from a clean `git archive` at `/private/tmp/legal-chat-phase05-06-clean-6e56864e98`. A fresh `npm ci --offline` and `npm run build` both passed, followed by all six suites below. Node 22.22.0, local isolated MongoDB replica set, separate fictional customer A/customer B/admin sessions. Deterministic provider and storage injection is restricted to `NODE_ENV=test`. Live retrieval and model trials are separate from those deterministic tests.
 
 **Functional verdict: PASS for the exercised cases.** This is not an exhaustive retrieval/answer-quality evaluation. The five-case retrieval dataset is small and deliberately uses fictional documents. The live model trials provide a small smoke sample, not proof that arbitrary cited prose is entailed by its source. Full phase gate/checkpoint status also depends on the external verification and candidate-checkpoint notes below.
 
 | Check | Expected and observed evidence | Result |
 |---|---|---|
 | 05.1 | Accepted → progress → validated paragraph → complete. The HTTP delayed fixture verifies the first paragraph is persisted while the attempt is still generating and arrives at least 100 ms before completion. Fragmented UTF-8, CRLF/delimiters and heartbeats are covered by client parser tests. Browser showed streamed paragraphs while validation was still in progress. | PASS |
-| 05.2 | TXT viewer returns the exact half-open UTF-16 range and immutable original. PDF source HTTP test returns the exact fixture bytes with PDF MIME, page 2 and `#page=2`. Shared historical citations change to Superseded then Archived without losing source access; an exact selected-source send replay returns its original answer after both transitions. Browser keyboard activation opens the exact TXT excerpt; Escape returns focus to the anchor. Actual PDF rendering was not separately inspected in the initial browser run. | PASS for API/source anchors; PDF browser check remains limited |
+| 05.2 | TXT viewer returns the exact half-open UTF-16 range and immutable original. PDF source HTTP test returns the exact fixture bytes with PDF MIME, page 2 and `#page=2`. Shared historical citations change to Superseded then Archived without losing source access; an exact selected-source send replay returns its original answer after both transitions. A changed payload with the same key still returns 409 after archive. Browser keyboard activation opens the exact TXT excerpt; Escape returns focus to the anchor. Real PDF browser follow-up opened the authenticated original in Chrome’s PDF viewer at page 2/2 and visually matched the exact 30-day sentence. | PASS |
 | 05.3 | All five labeled queries (exact clause ID, paraphrase, exception, amendment, cross-page continuation) retrieve the expected chunk in the first six across keyword/vector/hybrid against real Atlas and OpenRouter embeddings. Hybrid and keyword first relevant rank: 1 for all five. Vector: 1 for four, 2 for cross-page. Invalid anchors are withheld; one correction is bounded; a correction changing an already emitted paragraph is rejected. | PASS |
 | 05.4 | Customer B and seeded admin each receive 404 for A’s private filtered history, passage and file. Explicit selected IDs cannot grant access in A’s fresh thread or B’s thread. Both keyword and vector branch scopes are checked before fusion; unauthorized/stale hits fail closed. Real Atlas original-thread queries return authorized candidates; fresh/B queries return zero. JSON/SSE contracts, durable citations/suggestions, and suggestion submission are exercised. | PASS |
 | 06.1 | One complete comparison event carries the pinned A2UI v0.8 messages and closed ClauseComparison catalog. Notice row resolves the 30-day agreement and 60-day amendment; one-sided export evidence is explicitly missing. Unknown component/catalog/protocol/mismatched rows fail renderer validation. Browser rendered the complete card and source quotes. | PASS |
@@ -24,10 +24,10 @@ Build with `npm run build`, then run the following with Node 22 and the isolated
 | `npm run test:wave-02` | 10 |
 | `npm run test:wave-03` | 9 |
 | `npm run test:wave-04` | 12 |
-| `npm run test:wave-05` | 27 |
+| `npm run test:wave-05` | 28 |
 | `npm run test:wave-06` | 4 |
 
-Total: **68 passing tests**, zero failures/skips. Root-local logs are `/private/tmp/legal-chat-phase05-final-regression01.log` through `04.log`, `/private/tmp/legal-chat-phase05-final-tests.log` and `/private/tmp/legal-chat-phase06-final-tests.log`.
+Total: **69 passing tests**, zero failures/skips, from the exact committed candidate’s clean archive. Clean-run logs are `/private/tmp/legal-chat-phase05-06-clean-install.log`, `/private/tmp/legal-chat-phase05-06-clean-build.log` and `/private/tmp/legal-chat-phase05-06-clean-suite01.log` through `06.log`. Phase 05 includes an abort-signal regression for query embeddings and bounded correction checks.
 
 Source isolation case names are `05.4 second customer cannot read private history, passage or original file`, `05.4 seeded admin cannot read private history, passage or original file`, `05.4 explicit selected IDs cannot grant private evidence in another or fresh thread`, and `05.3/05.4 keyword and vector candidate scopes exclude private source before fusion`.
 
@@ -37,9 +37,12 @@ Source isolation case names are `05.4 second customer cannot read private histor
 - [Model trial](phase05-live-model-trial.json): chosen `openai/gpt-4o-mini` candidate; streaming structured output, factual citations, comparison rows, mixed evidence and ambiguity observations are recorded individually.
 - [Telemetry verification](phase05-live-telemetry.json): authoritative current ingestion/readback result, including any external timeout/blocker.
 - [Desktop comparison](phase05-06-desktop.jpg) and [mobile comparison](phase05-06-mobile.jpg): browser evidence from an isolated deterministic fictional fixture. Browser QA used real HTTP/SSE and DOM behavior, with model/storage doubles.
+- [PDF page 2](phase05-pdf-page2.jpg): actual cross-page fixture bytes in the authenticated native browser PDF viewer, page 2/2 selected and the original notice sentence visible.
 
 ## Remaining gate/checkpoint observations
 
 Langfuse export code is covered by masking/allowlist tests. The final [live telemetry evidence](phase05-live-telemetry.json) records **PASS** for ingestion and readback with six observations. Earlier probes had a timeout and an unavailable legacy read endpoint; the final verification uses the supported readback route and confirms the trace is present.
 
-The implementation plan also requires a clean checkout of a committed candidate and a verified remote GitHub checkpoint after PASS. These are distinct from the functional checks above. Do not interpret a working-tree test pass as a completed remote checkpoint. No production deployment, outbound email, or broad real-world legal-answer validation was performed in this QA run.
+The committed-candidate clean-install/build/test requirement is complete for the SHA above. The implementation plan’s remote GitHub checkpoint is tracked by the primary agent after this independent PASS; this report alone does not claim a push or merge. Subsequent report/screenshot-only changes do not alter the reviewed application or test code. No production deployment, outbound email, or broad real-world legal-answer validation was performed in this QA run.
+
+Remote checkpoint: **BLOCKED pending explicit publication approval**. Automatic approval review rejected `git push -u origin codex/phase05-06` because exporting repository contents to the GitHub remote was not explicitly authorized by the implementation/QA request. No push or remote modification occurred. Intended destination: `https://github.com/anshulagx/legal-chat`, branch `codex/phase05-06`. The implementation and QA are complete locally.
