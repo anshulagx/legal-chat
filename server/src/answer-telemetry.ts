@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Config } from './config.ts';
 import type { EvidenceSnapshot } from './retrieval.ts';
 
 export async function exportAnswerTrace(config: Config, trace: { traceId: string; attemptId: string; userMessageId: string; conversationId: string;
-  started: number; terminal: string; timings: Record<string, number>; snapshot?: EvidenceSnapshot }) {
+  started: number; terminal: string; timings: Record<string, number>; snapshot?: EvidenceSnapshot; retryId?: string; usage?: Record<string, number> }) {
   const settings = config.telemetry;
   if (!settings) return;
   // Construct a strict allowlist before serialization: never attach prompts,
@@ -16,6 +16,8 @@ export async function exportAnswerTrace(config: Config, trace: { traceId: string
     { key: 'conversation.id', value: stringValue(trace.conversationId) },
     { key: 'terminal.status', value: stringValue(trace.terminal) },
     { key: 'model.id', value: stringValue(config.answer?.model ?? '') },
+    ...(trace.retryId ? [{ key: 'retry.id', value: stringValue(createHash('sha256').update(trace.retryId).digest('hex')) }] : []),
+    ...Object.entries(trace.usage ?? {}).filter(([key, value]) => ['prompt_tokens', 'completion_tokens', 'total_tokens'].includes(key) && Number.isFinite(value) && value >= 0).map(([key, value]) => ({ key: `usage.${key}`, value: { doubleValue: value } })),
     ...Object.entries(trace.timings).map(([key, value]) => ({ key, value: { doubleValue: value } })),
   ];
   const start = BigInt(trace.started) * 1000000n;
@@ -42,4 +44,17 @@ export async function exportAnswerTrace(config: Config, trace: { traceId: string
   const result = await response.json() as { partialSuccess?: { rejectedSpans?: number } };
   if (Number(result.partialSuccess?.rejectedSpans ?? 0)) throw new Error('Telemetry export rejected spans.');
   return { traceId: trace.traceId, accepted: true };
+}
+
+const pending = new Set<Promise<unknown>>();
+export function queueAnswerTrace(...args: Parameters<typeof exportAnswerTrace>) {
+  if (pending.size >= 100) return;
+  const task = exportAnswerTrace(...args).catch(() => undefined);
+  pending.add(task);
+  void task.finally(() => pending.delete(task));
+}
+export async function flushAnswerTraces(timeoutMs = 1500) {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([Promise.allSettled([...pending]), new Promise<void>(resolve => { timer = setTimeout(resolve, timeoutMs); })]);
+  clearTimeout(timer);
 }

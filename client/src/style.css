@@ -99,3 +99,11 @@
 .source-dialog mark { background: #fff0a6; color: #202927; }
 .source-page { font-weight: 600; }
 @media (max-width: 600px) { .comparison-row { grid-template-columns: 1fr; } .comparison-side + .comparison-side { border-left: 0; border-top: 1px solid #cdd9ce; } .source-heading { flex-wrap: wrap; } }
+
+/* Reflow long unbroken questions, filenames and account details at 320px. */
+.message, .upload-panel, .thread-link, .secondary, .source-dialog { overflow-wrap: anywhere; }
+.source-heading > * { min-width: 0; }
+.source-heading button { flex-shrink: 0; }
+@media (max-width: 360px) { .message { padding: .8rem; } .chat-main { padding-inline: .75rem; } .source-dialog { padding: 1rem; } }
+.upload-panel { grid-template-columns: minmax(0, 1fr); }
+.upload-panel > * { min-width: 0; max-width: 100%; }

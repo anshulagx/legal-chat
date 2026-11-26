@@ -35,7 +35,13 @@ export function readConfig(env: NodeJS.ProcessEnv) {
   if (env.ANSWER_DEADLINE_MS && (!/^\d+$/.test(env.ANSWER_DEADLINE_MS) || Number(env.ANSWER_DEADLINE_MS) < 1000 || Number(env.ANSWER_DEADLINE_MS) > 180000)) throw new Error('Invalid ANSWER_DEADLINE_MS.');
   const telemetryConfigured = !!env.LANGFUSE_BASE_URL && !!env.LANGFUSE_PUBLIC_KEY && !!env.LANGFUSE_SECRET_KEY;
   if (telemetryConfigured && !/^https:\/\/(?:us\.|jp\.|hipaa\.)?cloud\.langfuse\.com\/?$/.test(env.LANGFUSE_BASE_URL!)) throw new Error('Invalid LANGFUSE_BASE_URL.');
+  for (const key of ['CHAT_GENERATION_LIMIT', 'CHAT_GENERATION_WINDOW_SECONDS', 'CHAT_ATTEMPT_LEASE_MS']) {
+    if (env[key] && (!/^\d+$/.test(env[key]!) || !Number.isSafeInteger(Number(env[key])) || Number(env[key]) < (key === 'CHAT_ATTEMPT_LEASE_MS' ? 1000 : 1) || Number(env[key]) > 2147483)) throw new Error(`Invalid ${key}.`);
+  }
   return {
+    generationLimit: Number(env.CHAT_GENERATION_LIMIT ?? 10),
+    generationWindowMs: Number(env.CHAT_GENERATION_WINDOW_SECONDS ?? 600) * 1000,
+    attemptLeaseMs: Number(env.CHAT_ATTEMPT_LEASE_MS ?? 90000),
     queryEmbedding: env.OPENROUTER_API_KEY && /^[\w.-]+\/[\w.:-]+$/.test(env.OPENROUTER_EMBEDDING_MODEL ?? '')
       && /^\d+$/.test(env.OPENROUTER_EMBEDDING_DIMENSIONS ?? '') && Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) >= 1 && Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) <= 8192
       ? { apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_EMBEDDING_MODEL!, dimensions: Number(env.OPENROUTER_EMBEDDING_DIMENSIONS), leaseMs: 120000, indexWaitMs: 180000 } : undefined,

@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
+import { trackAttempt, interruptAttempt, reconcileAttempts } from './attempts.ts';
 import mongoose, { Types } from 'mongoose';
 import { isDuplicate } from './accounts.ts';
 import { generateAnswer, type Answer } from './answer.ts';
@@ -36,7 +38,7 @@ function parseSend(body: unknown) {
   return { message, conversationId, clientMessageId, requestHash, selectedDocumentVersionIds };
 }
 
-async function reserve(ownerId: string, input: ReturnType<typeof parseSend>) {
+async function reserve(ownerId: string, input: ReturnType<typeof parseSend>, config: Config) {
   try {
     return await mongoose.connection.transaction(async session => {
       const existing = await Message.findOne({ ownerId, role: 'user', clientMessageId: input.clientMessageId }).session(session);
@@ -55,7 +57,7 @@ async function reserve(ownerId: string, input: ReturnType<typeof parseSend>) {
       const userId = new Types.ObjectId();
       const attemptId = new Types.ObjectId();
       const locked = await Conversation.findOneAndUpdate({ _id: conversation!._id, ownerId, activeAttemptId: null }, {
-        $set: { activeAttemptId: attemptId, updatedAt: new Date(),
+        $set: { activeAttemptId: attemptId, attemptLeaseExpiresAt: new Date(Date.now() + config.attemptLeaseMs), updatedAt: new Date(),
           ...(conversation!.messageCount === 0 ? { title: input.message.replace(/\s+/g, ' ').slice(0, 80) } : {}) },
         $inc: { nextSequence: 2, messageCount: 2 },
       }, { new: false, session });
@@ -82,41 +84,102 @@ async function reserve(ownerId: string, input: ReturnType<typeof parseSend>) {
 }
 
 type Emit = (event: string, data: unknown) => void;
-async function finish(user: StoredMessage, config: Config, emit?: Emit) {
+async function finish(user: StoredMessage, config: Config, signal: AbortSignal, emit?: Emit) {
   let answer: Answer | undefined;
+  let failureCode = 'ANSWER_UNAVAILABLE';
+  let retryAfterSeconds: number | undefined;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal.addEventListener('abort', abort, { once: true });
+  if (signal.aborted) abort();
+  const untrack = trackAttempt(String(user.attemptId), controller);
+  const lease = setInterval(() => {
+    void Conversation.updateOne({ _id: user.conversationId, activeAttemptId: user.attemptId,
+      attemptLeaseExpiresAt: { $gt: new Date() } }, { $set: { attemptLeaseExpiresAt: new Date(Date.now() + config.attemptLeaseMs) } })
+      .then(result => { if (!result.matchedCount) controller.abort(); }).catch(() => controller.abort());
+  }, Math.max(250, Math.floor(config.attemptLeaseMs / 3))).unref();
+  const deadline = AbortSignal.any([controller.signal, AbortSignal.timeout(config.answer?.deadlineMs ?? 90000)]);
   try {
     emit?.('progress', { stage: 'retrieval' });
-    answer = await generateAnswer({ message: user.content, ownerId: String(user.ownerId),
+    const generation = generateAnswer({ message: user.content, ownerId: String(user.ownerId),
       conversationId: String(user.conversationId), userMessageId: user.id, attemptId: String(user.attemptId),
-      selectedDocumentVersionIds: user.selectedDocumentVersionIds, config,
-      onProgress: stage => { emit?.('progress', { stage }); },
+      retryId: user.retryId ?? undefined, selectedDocumentVersionIds: user.selectedDocumentVersionIds, config, signal: deadline,
+      onTrace: async traceId => { await Message.updateOne({ _id: user.attemptId, status: 'generating' }, { $set: { traceId } }); },
+      onProgress: stage => { deadline.throwIfAborted(); emit?.('progress', { stage }); },
       onSnapshot: async snapshot => {
+        deadline.throwIfAborted();
         await Message.updateOne({ _id: user.attemptId, status: 'generating' }, { $set: { evidenceSnapshot: snapshot } });
       },
       onParagraph: async paragraph => {
+        deadline.throwIfAborted();
         const saved = await Message.updateOne({ _id: user.attemptId, status: 'generating', 'paragraphs.sequence': { $ne: paragraph.sequence } }, {
           $push: { paragraphs: paragraph, citations: { $each: paragraph.citations } },
         });
         if (saved.modifiedCount) emit?.('paragraph', paragraph);
       },
     });
-  } catch {
-    // Preserve the durable question and any validated partial paragraphs.
+    // Also bound adapters that cannot cancel their underlying operation.
+    answer = await new Promise<Answer>((resolve, reject) => {
+      const stopped = () => reject(deadline.reason);
+      deadline.addEventListener('abort', stopped, { once: true });
+      generation.then(resolve, reject).finally(() => deadline.removeEventListener('abort', stopped));
+      if (deadline.aborted) stopped();
+    });
+    deadline.throwIfAborted();
+  } catch (error) {
+    answer = undefined;
+    if (error instanceof HttpError && error.status === 429) {
+      failureCode = 'PROVIDER_THROTTLED'; retryAfterSeconds = error.retryAfterSeconds;
+    }
+  } finally {
+    clearInterval(lease); untrack(); signal.removeEventListener('abort', abort);
   }
   await mongoose.connection.transaction(async session => {
-    const locked = await Conversation.updateOne({ _id: user.conversationId, ownerId: user.ownerId, activeAttemptId: user.attemptId }, {
-      $set: { activeAttemptId: null, updatedAt: new Date() },
+    const locked = await Conversation.updateOne({ _id: user.conversationId, ownerId: user.ownerId, activeAttemptId: user.attemptId,
+      attemptLeaseExpiresAt: { $gt: new Date() } }, {
+      $set: { activeAttemptId: null, updatedAt: new Date() }, $unset: { attemptLeaseExpiresAt: 1 },
     }, { session });
     if (!locked.modifiedCount) return;
-    const status = answer ? 'completed' : 'failed';
+    const status = controller.signal.aborted ? 'interrupted' : answer ? 'completed' : 'failed';
     await Message.updateOne({ _id: user.attemptId, status: 'generating' }, {
       $set: { status, ...(answer ? { content: answer.response, followUps: answer.followUps,
         paragraphs: answer.paragraphs ?? [], citations: answer.citations ?? [], comparison: answer.comparison,
-        evidenceSnapshot: answer.evidenceSnapshot, handoffOffer: answer.handoffOffer, traceId: answer.traceId } : { failureCode: 'ANSWER_UNAVAILABLE' }) },
+        evidenceSnapshot: answer.evidenceSnapshot, handoffOffer: answer.handoffOffer, traceId: answer.traceId } : {
+          failureCode: status === 'interrupted' ? 'ATTEMPT_INTERRUPTED' : failureCode,
+          ...(retryAfterSeconds ? { retryAfterSeconds, retryAvailableAt: new Date(Date.now() + retryAfterSeconds * 1000) } : {}),
+        }) },
     }, { session });
-    await Message.updateOne({ _id: user._id }, { $set: { status } }, { session });
+    await Message.updateOne({ _id: user._id, attemptId: user.attemptId }, { $set: { status } }, { session });
   }, { writeConcern: { w: 'majority' } });
   if (answer?.comparison) emit?.('comparison', answer.comparison);
+}
+
+async function reserveRetry(ownerId: string, id: string, retryId: string, config: Config) {
+  const transaction = async () => mongoose.connection.transaction(async session => {
+    const user = await Message.findOne({ _id: id, ownerId, role: 'user' }).session(session);
+    if (!user) throw missing();
+    const existing = await Message.findOne({ parentTurnId: id, retryId }).session(session);
+    if (existing) { user.attemptId = existing._id; user.retryId = retryId; return { user, created: false }; }
+    const previous = await Message.findOne({ _id: user.attemptId, ownerId }).session(session);
+    if (!previous || !['failed', 'interrupted'].includes(previous.status)) throw new HttpError(409, 'RETRY_UNAVAILABLE', 'Only a failed or interrupted reply can be retried.');
+    if (previous.retryAvailableAt && previous.retryAvailableAt.getTime() > Date.now()) {
+      throw new HttpError(429, 'PROVIDER_THROTTLED', 'Please wait before retrying.', undefined, Math.ceil((previous.retryAvailableAt.getTime() - Date.now()) / 1000));
+    }
+    const attemptId = new Types.ObjectId();
+    const locked = await Conversation.findOneAndUpdate({ _id: user.conversationId, ownerId, activeAttemptId: null }, {
+      $set: { activeAttemptId: attemptId, attemptLeaseExpiresAt: new Date(Date.now() + config.attemptLeaseMs), updatedAt: new Date() },
+      $inc: { nextSequence: 1, messageCount: 1 },
+    }, { session });
+    if (!locked) throw new HttpError(409, 'GENERATION_ACTIVE', 'Wait for the current answer before retrying.');
+    await Message.create([{ _id: attemptId, ownerId, conversationId: user.conversationId, sequence: locked.nextSequence,
+      role: 'assistant', parentTurnId: user._id, retryId, status: 'generating' }], { session });
+    user.attemptId = attemptId; user.status = 'pending';
+    await user.save({ session });
+    user.retryId = retryId;
+    return { user, created: true };
+  });
+  try { return await transaction(); }
+  catch (error) { if (!isDuplicate(error)) throw error; return transaction(); }
 }
 
 async function sendResult(user: StoredMessage) {
@@ -124,10 +187,79 @@ async function sendResult(user: StoredMessage) {
   if (!attempt) throw new HttpError(503, 'UNAVAILABLE', 'The saved answer is temporarily unavailable.');
   return {
     conversationId: String(user.conversationId), userMessageId: user.id, attemptId: attempt.id,
+    retryAfterSeconds: attempt.retryAfterSeconds, retryAvailableAt: attempt.retryAvailableAt,
     clientMessageId: user.clientMessageId, status: attempt.status, response: attempt.content,
     citations: attempt.citations, paragraphs: attempt.paragraphs, comparison: attempt.comparison,
     handoffOffer: attempt.handoffOffer, draft: attempt.draft, followUps: attempt.followUps, failureCode: attempt.failureCode,
   };
+}
+
+async function respond(req: express.Request, res: express.Response, reserved: { user: StoredMessage; created: boolean }, config: Config) {
+  const controller = new AbortController();
+  const disconnected = () => { if (!res.writableEnded) controller.abort(); };
+  res.once('close', disconnected);
+  if (res.destroyed) controller.abort();
+  const streaming = !!req.get('Accept')?.includes('text/event-stream');
+  // Missing provider configuration is rejected before starting a stream. Test
+  // adapters are deliberately allowed only in test processes.
+  if (reserved.created && !config.answer && process.env.NODE_ENV !== 'test') {
+    await interruptAttempt(String(reserved.user.attemptId), 'ANSWER_UNAVAILABLE');
+    res.removeListener('close', disconnected);
+    return res.status(503).json({ ...await sendResult(reserved.user), code: 'ANSWER_UNAVAILABLE', retryable: true,
+      message: 'Answers are temporarily unavailable. Your question is saved.' });
+  }
+  let heartbeat: NodeJS.Timeout | undefined;
+  let opening: NodeJS.Timeout | undefined;
+  let started = false;
+  const queued: [string, unknown][] = [];
+  const write: Emit = (event, data) => { if (!res.destroyed && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+  const start = () => {
+    if (started || !streaming || res.destroyed) return;
+    started = true;
+    res.status(200).set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+    res.flushHeaders();
+    write('accepted', { conversationId: String(reserved.user.conversationId), userMessageId: reserved.user.id, attemptId: String(reserved.user.attemptId) });
+    for (const [event, data] of queued.splice(0)) write(event, data);
+    heartbeat = setInterval(() => { if (!res.destroyed && !res.writableEnded) res.write(': heartbeat\n\n'); }, 10000).unref();
+  };
+  const emit: Emit = (event, data) => {
+    // Brief admission window allows immediate provider errors to retain HTTP
+    // semantics. Long retrieval still flushes accepted/progress promptly.
+    if (!started && event === 'paragraph') start();
+    if (started) write(event, data); else queued.push([event, data]);
+  };
+  if (streaming) opening = setTimeout(start, 100).unref();
+
+  try {
+    if (reserved.created) await finish(reserved.user, config, controller.signal, streaming ? emit : undefined);
+    const result = await sendResult(reserved.user);
+    if (!streaming) {
+      if (result.retryAfterSeconds) res.set('Retry-After', String(result.retryAfterSeconds));
+      return res.status(result.status === 'generating' ? 202 : result.status === 'failed' ? result.failureCode === 'PROVIDER_THROTTLED' ? 429 : 503 : 200).json(result.status === 'failed' ? { ...result, code: result.failureCode, retryable: true, message: 'The reply could not be completed. Your question is saved.' } : result);
+    }
+    clearTimeout(opening);
+    if (!started && ['failed', 'interrupted'].includes(result.status)) {
+      if (result.retryAfterSeconds) res.set('Retry-After', String(result.retryAfterSeconds));
+      return res.status(result.failureCode === 'PROVIDER_THROTTLED' ? 429 : 503).json({ ...result,
+        code: result.failureCode, retryable: true, message: 'The reply could not be completed. Your question is saved.' });
+    }
+    start();
+    if (!reserved.created) {
+      for (const paragraph of result.paragraphs ?? []) emit('paragraph', paragraph);
+      if (result.comparison) emit('comparison', result.comparison);
+    }
+    if (['failed', 'interrupted'].includes(result.status)) emit('error', { code: result.failureCode, ...result, retryable: true });
+    else if (result.status === 'generating') emit('progress', { stage: 'generation' });
+    else emit('complete', result);
+  } catch {
+    if (streaming && started) emit('error', { code: 'ANSWER_UNAVAILABLE', attemptId: String(reserved.user.attemptId),
+      userMessageId: reserved.user.id, conversationId: String(reserved.user.conversationId), retryable: true });
+    else throw new HttpError(503, 'ANSWER_UNAVAILABLE', 'The saved reply is temporarily unavailable. Retry with the same request ID.');
+  } finally {
+    clearTimeout(opening); clearInterval(heartbeat); res.removeListener('close', disconnected);
+    if (streaming && !res.writableEnded) res.end();
+  }
 }
 
 function summary(conversation: InstanceType<typeof Conversation>) {
@@ -135,6 +267,8 @@ function summary(conversation: InstanceType<typeof Conversation>) {
 }
 function messageView(message: StoredMessage) {
   return {
+    selectedDocumentVersionIds: message.selectedDocumentVersionIds, retryId: message.retryId,
+    retryAvailableAt: message.retryAvailableAt,
     id: message.id, conversationId: String(message.conversationId), sequence: message.sequence,
     role: message.role, content: message.content, status: message.status,
     clientMessageId: message.clientMessageId, attemptId: message.role === 'assistant' ? message.id : String(message.attemptId),
@@ -184,6 +318,37 @@ export function chatRouter(config: Config, available: () => boolean) {
   });
   router.use(requestGuard(config, available), requireSession(config));
   router.use(express.json({ limit: '40kb' }));
+
+  const generationLimit = rateLimit({ windowMs: config.generationWindowMs, limit: config.generationLimit,
+    keyGenerator: (_req, res) => String(res.locals.account.id), standardHeaders: 'draft-8', legacyHeaders: false,
+    skip: async (req, res) => {
+      const ownerId = res.locals.account.id;
+      if (req.path === '/chat/send' && typeof req.body?.clientMessageId === 'string') {
+        return !!await Message.exists({ ownerId, role: 'user', clientMessageId: req.body.clientMessageId });
+      }
+      if (objectId.test(String(req.params.id)) && typeof req.body?.retryId === 'string') {
+        return !!await Message.exists({ ownerId, parentTurnId: req.params.id, retryId: req.body.retryId });
+      }
+      return false;
+    },
+    handler: (_req, res) => {
+      const seconds = Math.max(1, Math.ceil((((res.req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime?.getTime() ?? Date.now() + config.generationWindowMs) - Date.now()) / 1000));
+      res.set('Retry-After', String(seconds)).status(429).json({ code: 'GENERATION_LIMIT', message: 'Please wait before requesting another reply.', retryable: true, retryAfterSeconds: seconds });
+    },
+  });
+  router.use(async (_req, _res, next) => { await reconcileAttempts(); next(); });
+  router.post('/chat/messages/:id/cancel', async (req, res) => {
+    if (!objectId.test(String(req.params.id))) throw missing();
+    const attempt = await Message.findOne({ _id: req.params.id, ownerId: res.locals.account.id, role: 'assistant' });
+    if (!attempt) throw missing();
+    await interruptAttempt(attempt.id, 'ATTEMPT_CANCELLED');
+    res.json({ attemptId: attempt.id, status: (await Message.findById(attempt.id))!.status });
+  });
+  router.post('/chat/messages/:id/retry', generationLimit, async (req, res) => {
+    if (!objectId.test(String(req.params.id))) throw missing();
+    if (typeof req.body?.retryId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(req.body.retryId)) throw invalid('Provide a retry ID.');
+    return respond(req, res, await reserveRetry(res.locals.account.id, String(req.params.id), req.body.retryId, config), config);
+  });
 
   router.post('/conversations', async (_req, res) => {
     const conversation = await Conversation.create({ ownerId: res.locals.account.id });
@@ -238,7 +403,7 @@ export function chatRouter(config: Config, available: () => boolean) {
     res.json({ draft: saved!.draft, followUps: saved!.followUps });
   });
 
-  router.post('/chat/send', async (req, res) => {
+  router.post('/chat/send', generationLimit, async (req, res) => {
     const input = parseSend(req.body);
     const existing = await Message.findOne({ ownerId: res.locals.account.id, role: 'user', clientMessageId: input.clientMessageId }).select('requestHash');
     if (existing && existing.requestHash !== input.requestHash) throw conflictingKey();
@@ -252,29 +417,8 @@ export function chatRouter(config: Config, available: () => boolean) {
           ...(input.conversationId ? [{ scope: 'private', ownerId, conversationId: input.conversationId }] : [])] }).select('_id');
       if (allowed.length !== input.selectedDocumentVersionIds.length) throw invalid('Selected documents are unavailable in this chat.');
     }
-    const reserved = await reserve(res.locals.account.id, input);
-    if (!req.accepts(['text/event-stream', 'application/json']) || !req.get('Accept')?.includes('text/event-stream')) {
-      if (reserved.created) await finish(reserved.user, config);
-      const result = await sendResult(reserved.user);
-      return res.status(result.status === 'generating' ? 202 : 200).json(result);
-    }
-    res.status(200).set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform',
-      'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
-    res.flushHeaders();
-    const emit: Emit = (event, data) => { if (!res.destroyed && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
-    emit('accepted', { conversationId: String(reserved.user.conversationId), userMessageId: reserved.user.id, attemptId: String(reserved.user.attemptId) });
-    const heartbeat = setInterval(() => { if (!res.destroyed) res.write(': heartbeat\n\n'); }, 10000).unref();
-    try {
-      if (reserved.created) await finish(reserved.user, config, emit);
-      const result = await sendResult(reserved.user);
-      if (!reserved.created) {
-        for (const paragraph of result.paragraphs ?? []) emit('paragraph', paragraph);
-        if (result.comparison) emit('comparison', result.comparison);
-      }
-      if (result.status === 'failed') emit('error', { code: result.failureCode, attemptId: result.attemptId, retryable: true });
-      else if (result.status === 'generating') emit('progress', { stage: 'generation' });
-      else emit('complete', result);
-    } finally { clearInterval(heartbeat); res.end(); }
+    const reserved = await reserve(res.locals.account.id, input, config);
+    return respond(req, res, reserved, config);
   });
   return router;
 }

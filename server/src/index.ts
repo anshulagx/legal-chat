@@ -5,6 +5,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { initializeAccounts } from './accounts.ts';
 import { authRouter } from './auth.ts';
+import { reconcileAttempts, abortAllAttempts } from './attempts.ts';
+import { flushAnswerTraces } from './answer-telemetry.ts';
 import { chatRouter } from './chat.ts';
 import { sourceRouter } from './sources.ts';
 import { initializeConversations } from './conversations.ts';
@@ -83,6 +85,7 @@ async function connectDatabase() {
       await mongoose.connect(currentConfig.mongoUri, { dbName: currentConfig.database, serverSelectionTimeoutMS: 3000 });
       await initializeAccounts(currentConfig);
       await initializeConversations();
+      await reconcileAttempts();
       await initializeUploads();
       await initializeIndexRecords();
       if (storage) await storage.verify(currentConfig.origin);
@@ -98,18 +101,20 @@ async function connectDatabase() {
 void connectDatabase();
 let cleaning = false;
 const cleanupTimer = setInterval(() => {
-  if (!storage || !available() || cleaning) return;
+  if (!available() || cleaning) return;
   cleaning = true;
-  void cleanupUploads(storage).catch(() => console.error(JSON.stringify({ event: 'upload_cleanup_unavailable' }))).finally(() => { cleaning = false; });
+  void Promise.all([reconcileAttempts(), ...(storage ? [cleanupUploads(storage)] : [])]).catch(() => console.error(JSON.stringify({ event: 'upload_cleanup_unavailable' }))).finally(() => { cleaning = false; });
 }, 60000).unref();
 
 async function shutdown() {
   if (stopping) return;
   stopping = true;
   stopWorker();
+  abortAllAttempts();
   clearInterval(cleanupTimer);
   const deadline = setTimeout(() => process.exit(1), 5000).unref();
   await new Promise<void>(done => server.close(() => done()));
+  await flushAnswerTraces();
   await mongoose.disconnect();
   clearTimeout(deadline);
 }

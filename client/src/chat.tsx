@@ -6,11 +6,11 @@ import { CitationLink, ComparisonSurface, SourceViewer, type Citation, type Para
 type Conversation = { id: string; title: string; updatedAt: string };
 type Message = {
   id: string; conversationId: string; role: 'user' | 'assistant'; content: string;
-  status: string; attemptId: string; sequence: number; paragraphs?: Paragraph[]; citations?: Citation[];
+  status: string; clientMessageId?: string; parentTurnId?: string; selectedDocumentVersionIds?: string[]; retryAvailableAt?: string; attemptId: string; sequence: number; paragraphs?: Paragraph[]; citations?: Citation[];
   comparison?: Comparison; followUps?: string[]; handoffOffer?: { unresolvedQuestion: string }; draft?: EmailDraft;
 };
 type Page<T> = { items: T[]; nextCursor: string | null };
-type SendBody = { message: string; clientMessageId: string; conversationId?: string; selectedDocumentVersionIds?: string[] };
+type SendBody = { retryTurnId?: string; retryId?: string; message: string; clientMessageId: string; conversationId?: string; selectedDocumentVersionIds?: string[] };
 type SendResult = Omit<Message, 'id' | 'role' | 'content' | 'sequence'> & { userMessageId: string; response: string };
 
 export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionExpired: () => void; admin?: boolean }) {
@@ -25,6 +25,10 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [problem, setProblem] = useState('');
+  const [retryAt, setRetryAt] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [currentAttempt, setCurrentAttempt] = useState<string>();
+  useEffect(() => { if (!retryAt) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [retryAt]);
   const [retry, setRetry] = useState<SendBody>();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [stage, setStage] = useState('');
@@ -98,6 +102,18 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
     return collected;
   }
 
+  useEffect(() => {
+    if (!selected || sending || !messages.some(item => item.status === 'generating')) return;
+    let disposed = false;
+    const version = viewVersion.current;
+    const timer = setInterval(() => {
+      void history(selected).then(saved => {
+        if (!disposed && version === viewVersion.current && !lifetime.current.signal.aborted) setMessages(saved);
+      }).catch(() => { /* A later poll can recover a brief restart outage. */ });
+    }, 2000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [selected, sending, messages.some(item => item.status === 'generating')]);
+
   async function select(conversationId?: string) {
     if (activeSend.current || uploading) return;
     const version = ++viewVersion.current;
@@ -105,14 +121,19 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
     setSelectedVersions([]); setVersions([]);
     setMessages([]);
     setDraft('');
-    setRetry(undefined);
+    setRetry(undefined); setRetryAt(0); setStage(''); setCopyStatus('');
     setProblem('');
     setHistoryOpen(false);
     setLoading(Boolean(conversationId));
     if (!conversationId) { focusComposer.current = true; return; }
     try {
       const saved = await history(conversationId);
-      if (version === viewVersion.current && !lifetime.current.signal.aborted) setMessages(saved);
+      if (version === viewVersion.current && !lifetime.current.signal.aborted) {
+        setMessages(saved);
+        const failed = [...saved].reverse().find(item => item.role === 'assistant' && ['failed', 'interrupted'].includes(item.status));
+        const user = saved.find(item => item.id === failed?.parentTurnId);
+        if (user?.selectedDocumentVersionIds) setSelectedVersions(user.selectedDocumentVersionIds);
+      }
     } catch {
       if (version === viewVersion.current && !lifetime.current.signal.aborted) setProblem('Could not load this chat. Select it again to retry.');
     } finally {
@@ -121,34 +142,46 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
   }
 
   async function send(body: SendBody) {
-    if (activeSend.current) return;
+    if (activeSend.current || Date.now() < retryAt) return;
     activeSend.current = true;
     setSending(true);
     setStage('Saving your question…');
     setProblem('');
     setRetry(body);
-    if (!retry) {
+    if (!retry && !body.retryTurnId) {
       setMessages(previous => [...previous, { id: body.clientMessageId, content: body.message, role: 'user',
-        conversationId: body.conversationId ?? '', sequence: previous.length, status: 'pending', attemptId: '' }]);
+        conversationId: body.conversationId ?? '', clientMessageId: body.clientMessageId, selectedDocumentVersionIds: body.selectedDocumentVersionIds, sequence: previous.length, status: 'pending', attemptId: '' }]);
       setDraft('');
     }
+    let acceptedUserId = body.retryTurnId;
+    let acceptedConversationId = body.conversationId;
+    let failedOnServer = false;
     try {
       let result: SendResult | undefined;
       let attemptId = '';
-      const streamResponse = await fetch('/chat/send', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: lifetime.current.signal,
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(body) });
+      const streamResponse = await fetch(body.retryTurnId ? `/chat/messages/${body.retryTurnId}/retry` : '/chat/send', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: lifetime.current.signal,
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(body.retryTurnId ? { retryId: body.retryId } : body) });
       if (streamResponse.status === 401) { onSessionExpired(); throw new Error('Please log in again.'); }
-      if (!streamResponse.ok) { const failure = await streamResponse.json(); throw new Error(failure.message || 'Could not send your question.'); }
+      if (!streamResponse.ok) {
+        const failure = await streamResponse.json();
+        if (failure.code === 'RETRY_UNAVAILABLE') setRetry(undefined);
+        if (failure.userMessageId) { acceptedUserId = failure.userMessageId; acceptedConversationId = failure.conversationId; failedOnServer = true; }
+        const seconds = Number(streamResponse.headers.get('Retry-After') ?? failure.retryAfterSeconds ?? 0);
+        if (seconds > 0) { setRetryAt(Date.now() + seconds * 1000); setNow(Date.now()); }
+        throw new Error(failure.message || 'Could not send your question.');
+      }
       if (streamResponse.headers.get('content-type')?.includes('text/event-stream')) {
         if (!streamResponse.body) throw new Error('The reply stream is unavailable.');
         await readEventStream(streamResponse.body, event => {
           const value = event.data as Record<string, unknown>;
           if (event.event === 'accepted') {
             attemptId = String(value.attemptId); const conversationId = String(value.conversationId);
-            setSelected(conversationId);
+            setSelected(conversationId); setCurrentAttempt(attemptId);
+            acceptedUserId = String(value.userMessageId); acceptedConversationId = conversationId;
+            setMessages(previous => previous.map(item => item.id === body.clientMessageId ? { ...item, id: acceptedUserId!, attemptId, conversationId } : item));
             result = { conversationId, userMessageId: String(value.userMessageId), attemptId, status: 'generating', response: '' };
             setMessages(previous => previous.some(item => item.id === attemptId) ? previous : [...previous, {
-              id: attemptId, attemptId, conversationId, role: 'assistant', content: '', status: 'generating', sequence: previous.length, paragraphs: [] }]);
+              id: attemptId, attemptId, conversationId, parentTurnId: acceptedUserId, role: 'assistant', content: '', status: 'generating', sequence: previous.length, paragraphs: [] }]);
           } else if (event.event === 'progress') {
             const labels: Record<string, string> = { retrieval: 'Finding relevant sources…', retrieving: 'Finding relevant sources…', generation: 'Preparing a grounded reply…', generating: 'Preparing a grounded reply…', comparing: 'Comparing both versions…', validation: 'Checking source references…', validating: 'Checking source references…' };
             setStage(labels[String(value.stage)] ?? String(value.stage ?? 'Preparing your reply…'));
@@ -159,7 +192,12 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
           } else if (event.event === 'comparison') {
             setMessages(previous => previous.map(item => item.id === attemptId ? { ...item, comparison: (value.comparison ?? value) as Comparison } : item));
           } else if (event.event === 'complete') result = value as SendResult;
-          else if (event.event === 'error') throw new Error(String(value.message ?? 'The reply was interrupted. Your question and any displayed paragraphs are saved.'));
+          else if (event.event === 'error') {
+            failedOnServer = true;
+            const seconds = Number(value.retryAfterSeconds ?? 0);
+            if (seconds > 0) { setRetryAt(Date.now() + seconds * 1000); setNow(Date.now()); }
+            throw new Error(String(value.message ?? 'The reply was interrupted. Your question and any displayed paragraphs are saved.'));
+          }
         });
         if (!result) throw new Error('The reply stream ended before completion. Retry to check the saved answer.');
       } else result = await streamResponse.json() as SendResult;
@@ -176,14 +214,30 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
       }
       if (lifetime.current.signal.aborted) return;
       setMessages(saved);
-      setRetry(undefined);
+      const terminal = saved.find(item => item.id === completed.attemptId);
+      if (terminal && ['failed', 'interrupted'].includes(terminal.status)) { failedOnServer = true; throw new Error('The reply could not be completed. Your question is saved.'); }
+      setStage('Reply completed.');
+      setRetry(undefined); setRetryAt(0);
       void loadConversations();
       focusComposer.current = true;
     } catch (error) {
-      if (!lifetime.current.signal.aborted) setProblem(error instanceof Error ? error.message : 'Could not send your question. Retry to check whether it was saved.');
+      if (!lifetime.current.signal.aborted) {
+        setProblem(error instanceof Error ? error.message : 'Could not send your question. Retry to check whether it was saved.');
+        if (acceptedConversationId) {
+          try {
+            const saved = await history(acceptedConversationId); setSelected(acceptedConversationId);
+            const user = saved.find(item => item.role === 'user' && (item.id === acceptedUserId || item.clientMessageId === body.clientMessageId));
+            if (user) acceptedUserId = user.id;
+            setMessages(previous => !body.retryTurnId && !user ? [...saved, ...previous.filter(item => item.id === body.clientMessageId)] : saved);
+            const attempt = saved.find(item => item.id === user?.attemptId);
+            failedOnServer ||= !!attempt && ['failed', 'interrupted'].includes(attempt.status);
+          } catch { /* Keep the displayed partial reply and transport retry ID. */ }
+        }
+        if (failedOnServer && acceptedUserId) setRetry({ ...body, conversationId: acceptedConversationId, retryTurnId: acceptedUserId, retryId: crypto.randomUUID() });
+      }
     } finally {
       activeSend.current = false;
-      if (!lifetime.current.signal.aborted) setSending(false);
+      if (!lifetime.current.signal.aborted) { setSending(false); setCurrentAttempt(undefined); }
     }
   }
 
@@ -238,12 +292,12 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
     <main className={`chat-main ${!selected && !messages.length ? 'fresh-chat' : ''}`}>
       <h1>{title}</h1>
       {!selected && !messages.length && <p className="chat-intro">Start a new support question, or pick up a previous chat.</p>}
-      {!selected && !messages.length && Boolean(starters.length) && <div className="starter-questions" aria-label="Starter questions">
+      {!selected && !messages.length && Boolean(starters.length) && <div className="starter-questions" role="group" aria-label="Starter questions">
         {starters.map(item => <button type="button" className="secondary" key={item.id} disabled={sending || uploading || loading || Boolean(retry)}
           onClick={() => void send({ message: item.question, clientMessageId: crypto.randomUUID() })}>{item.question}</button>)}
       </div>}
       {loading && <p role="status">Loading this chat…</p>}
-      <div className="message-list" aria-label="Messages">
+      <div className="message-list" role="region" aria-label="Messages">
         {messages.map(message => <article className={`message message-${message.role}`} key={message.id}>
           <h2>{message.role === 'user' ? 'You' : 'Support'}</h2>
           {message.paragraphs?.length ? message.paragraphs.map(paragraph => <div className="answer-paragraph" key={paragraph.sequence}>
@@ -254,15 +308,27 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
             <button type="button" className="secondary" disabled={Boolean(draftBusy)} onClick={() => void acceptDraft(message)}>{draftBusy === message.id ? 'Preparing draft…' : 'Draft an email to support'}</button></div>}
           {message.draft && <section className="email-draft" aria-label="Support email draft"><h3>Email draft</h3><p><strong>Subject:</strong> {message.draft.subject}</p>
             <textarea aria-label="Email draft text" readOnly rows={8} value={message.draft.body} /><button type="button" className="secondary" onClick={() => void copyDraft(message.draft!)}>Copy draft</button></section>}
-          {message.status === 'completed' && message.followUps?.length === 2 && <div className="follow-ups" aria-label="Suggested questions">{message.followUps.map(question =>
+          {message.status === 'completed' && message.followUps?.length === 2 && <div className="follow-ups" role="group" aria-label="Suggested questions">{message.followUps.map(question =>
             <button key={question} type="button" className="secondary" disabled={sending || uploading || loading || Boolean(retry)} onClick={() => ask(question)}>{question}</button>)}</div>}
           {message.status === 'generating' && <p role="status">Preparing a reply…</p>}
-          {message.role === 'assistant' && message.status === 'failed' && <p className="error">The reply could not be completed. Your question is saved.</p>}
+          {message.role === 'assistant' && ['failed', 'interrupted'].includes(message.status) && <>
+            <p className="error">{message.status === 'interrupted' ? 'Reply interrupted.' : 'Reply failed.'} Any partial text above belongs to this attempt. Your question and document selections are saved.</p>
+            {!retry && messages.some(user => user.id === message.parentTurnId && user.attemptId === message.id) && <button type="button" className="secondary" disabled={sending || now < retryAt} onClick={() => {
+              const user = messages.find(item => item.id === message.parentTurnId);
+              if (!user) return;
+              const body = { message: user.content, clientMessageId: user.id, conversationId: user.conversationId,
+                retryTurnId: user.id, retryId: crypto.randomUUID(), selectedDocumentVersionIds: user.selectedDocumentVersionIds };
+              if (message.retryAvailableAt && Date.parse(message.retryAvailableAt) > Date.now()) {
+                setRetry(body); setRetryAt(Date.parse(message.retryAvailableAt)); setProblem('Please wait before retrying.');
+              } else void send(body);
+            }}>Retry reply</button>}
+          </>}
         </article>)}
       </div>
-      <p className="chat-status" role="status" aria-live="polite">{sending ? stage : copyStatus}</p>
+      <p className="chat-status" role="status" aria-live="polite">{sending ? stage : copyStatus || stage}</p>
+      {sending && currentAttempt && <button type="button" className="secondary" onClick={() => { void request(`/chat/messages/${currentAttempt}/cancel`, {}).catch(() => setProblem('Could not stop the reply. Please try again.')); }}>Stop reply</button>}
       {problem && <div className="send-error"><p id="chat-error" className="error" role="alert">{problem}</p>
-        {retry && <button type="button" className="secondary" disabled={sending} onClick={() => void send(retry)}>Retry sending</button>}</div>}
+        {retry && <button type="button" className="secondary" disabled={sending || now < retryAt} onClick={() => void send(retry)}>{now < retryAt ? `Retry available in ${Math.ceil((retryAt - now) / 1000)} seconds` : retry.retryTurnId ? 'Retry reply' : 'Retry sending'}</button>}</div>}
       {versions.filter(item => item.status === 'ready').length >= 2 && <fieldset className="version-picker" disabled={sending || uploading || Boolean(retry)}><legend>Choose two versions to compare (optional)</legend>
         {versions.filter(item => item.status === 'ready').map(item => <label key={item.versionId}><input type="checkbox" checked={selectedVersions.includes(item.versionId)}
           disabled={!selectedVersions.includes(item.versionId) && selectedVersions.length === 2} onChange={event => setSelectedVersions(previous => event.target.checked ? [...previous, item.versionId] : previous.filter(id => id !== item.versionId))} /> {item.filename}</label>)}
@@ -270,7 +336,7 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
       <form className="composer" onSubmit={submit} aria-busy={sending}>
         <label htmlFor="question">Your question</label>
         <textarea ref={textarea} id="question" name="question" value={draft} rows={3} maxLength={8000}
-          aria-describedby={problem ? 'chat-error' : undefined} disabled={loading || Boolean(retry)}
+          aria-describedby={problem ? 'chat-error' : undefined} readOnly={loading || sending || Boolean(retry)} aria-disabled={loading || sending || Boolean(retry)}
           placeholder="Ask a support question…" onChange={event => setDraft(event.target.value)} />
         <button type="submit" className="primary" disabled={sending || uploading || loading || Boolean(retry)}>Send question</button>
       </form>

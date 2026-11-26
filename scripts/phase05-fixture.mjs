@@ -37,6 +37,7 @@ setTestGroundedProvider({
     const passage = context.passages.find(p => p.text.includes('orchid-742')) ?? context.passages[0];
     const first = passage ? { kind: 'supported', text: passage.text, passageIds: [passage.id] } : { kind: 'gap', text: 'The documents do not answer this question.', passageIds: [] };
     await onParagraph?.(first, 0);
+    if (request.message === 'RETRY_SNAPSHOT' && !request.retryId) throw new Error('Fictional failure after snapshot');
     if (request.message.startsWith('DELAYED:')) await delay(200);
     const gap = /missing|absent|liability cap/i.test(request.message);
     const paragraphs = [first];

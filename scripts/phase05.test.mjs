@@ -84,9 +84,15 @@ test('Phase 05 grounded answers, streaming and source isolation', { timeout: 120
   await t.test('05.3 invalid citation is withheld and never saved as supported output', async () => {
     const response = await app.call('/chat/send', { cookie: app.a.cookie, accept: 'text/event-stream',
       body: { message: 'INVALID_CITATION', conversationId, clientMessageId: randomUUID() } });
-    const events = await stream(response);
-    assert.ok(!events.some(event => event.event === 'paragraph' && event.data.text.includes('Invented claim')));
-    const result = await app.db.collection('messages').findOne({ _id: new ObjectId(events[0].data.attemptId) });
+    let attemptId;
+    if (response.status === 503) {
+      const failure = await response.json(); assert.equal(failure.status, 'failed'); attemptId = failure.attemptId;
+    } else {
+      const events = await stream(response);
+      assert.ok(!events.some(event => event.event === 'paragraph' && event.data.text.includes('Invented claim')));
+      attemptId = events[0].data.attemptId;
+    }
+    const result = await app.db.collection('messages').findOne({ _id: new ObjectId(attemptId) });
     assert.ok(!JSON.stringify(result.paragraphs).includes('Invented claim'));
     assert.ok(!JSON.stringify(result.citations).includes('nonexistent-passage'));
   });

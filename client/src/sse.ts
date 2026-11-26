@@ -39,5 +39,5 @@ export async function readEventStream(stream: ReadableStream<Uint8Array>, onEven
       drain(done);
       if (done) break;
     }
-  } finally { reader.releaseLock(); }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }

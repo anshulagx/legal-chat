@@ -1,3 +1,4 @@
+import { HttpError } from './http.ts';
 import type { AnswerRequest, Plan } from './answer.ts';
 import type { EvidencePassage, SnapshotVersion } from './retrieval.ts';
 
@@ -46,10 +47,18 @@ async function completion(request: AnswerRequest, messages: {role:string;content
   if (!request.config?.answer) throw new Error('The chat model is not configured.');
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST', signal, headers: { Authorization: `Bearer ${request.config.answer.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: request.config.answer.model, messages, max_tokens: 5000, temperature: 0, stream: true,
+    body: JSON.stringify({ model: request.config.answer.model, messages, max_tokens: 5000, temperature: 0, stream: true, stream_options: { include_usage: true },
       provider: { require_parameters: true }, response_format: { type: 'json_schema', json_schema: { name: 'grounded_support', strict: true, schema } } }),
   });
-  if (!response.ok || !response.body) throw new Error(`Chat provider unavailable (${response.status}).`);
+  if (!response.ok || !response.body) {
+    if (response.status === 429) {
+      const raw = response.headers.get('retry-after');
+      const seconds = raw && /^\d+$/.test(raw) ? Number(raw) : raw ? Math.ceil((Date.parse(raw) - Date.now()) / 1000) : 60;
+      throw new HttpError(429, 'PROVIDER_THROTTLED', 'The answer provider is busy. Please retry later.', undefined,
+        Number.isFinite(seconds) ? Math.min(86400, Math.max(1, seconds)) : 60);
+    }
+    throw new HttpError(503, 'ANSWER_UNAVAILABLE', 'The answer provider is temporarily unavailable.');
+  }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', json = '', emitted = 0, done = false;
@@ -57,6 +66,7 @@ async function completion(request: AnswerRequest, messages: {role:string;content
     const data = raw.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
     if (!data || data === '[DONE]') return;
     const event = JSON.parse(data);
+    if (event.usage && typeof event.usage === 'object') request.onUsage?.(event.usage);
     if (event.error) throw new Error('Chat provider failed during generation.');
     const choice = event.choices?.[0];
     if (choice?.finish_reason === 'length' || choice?.finish_reason === 'content_filter') throw new Error('The provider did not finish the structured answer.');

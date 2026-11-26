@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Config } from './config.ts';
 import { retrieveEvidence, snapshotVersions, type EvidencePassage, type EvidenceSnapshot, type SnapshotVersion } from './retrieval.ts';
-import { exportAnswerTrace } from './answer-telemetry.ts';
+import { queueAnswerTrace } from './answer-telemetry.ts';
 import { openRouterGenerate, openRouterPlan } from './answer-provider.ts';
 
 export type Citation = { id: string; versionId: string; passageId: string; quote: string; filename: string; page?: number; start?: number; end?: number };
@@ -14,8 +14,8 @@ export type Comparison = { protocolVersion: 'v0.8'; catalogVersion: 'legal-suppo
     { beginRendering: { surfaceId: string; root: string; catalogId: string } }] };
 export type Answer = { response: string; followUps: string[]; paragraphs?: Paragraph[]; citations?: Citation[]; evidenceSnapshot?: EvidenceSnapshot;
   comparison?: Comparison; handoffOffer?: { unresolvedQuestion: string }; traceId?: string };
-export type AnswerRequest = { message: string; conversationId: string; userMessageId: string; attemptId: string; ownerId?: string; selectedDocumentVersionIds?: string[]; config?: Config; signal?: AbortSignal;
-  onSnapshot?: (snapshot: EvidenceSnapshot) => Promise<void>; onParagraph?: (paragraph: Paragraph) => Promise<void>; onProgress?: (stage: string) => void | Promise<void> };
+export type AnswerRequest = { message: string; conversationId: string; userMessageId: string; attemptId: string; ownerId?: string; selectedDocumentVersionIds?: string[]; retryId?: string; onUsage?: (usage: Record<string, unknown>) => void; config?: Config; signal?: AbortSignal;
+  onTrace?: (traceId: string) => Promise<void>; onSnapshot?: (snapshot: EvidenceSnapshot) => Promise<void>; onParagraph?: (paragraph: Paragraph) => Promise<void>; onProgress?: (stage: string) => void | Promise<void> };
 type AnswerAdapter = (request: AnswerRequest) => Promise<Answer>;
 export type Plan = { mode: 'answer' | 'comparison' | 'clarification'; selectedVersionIds: string[] };
 export interface GroundedProvider {
@@ -116,10 +116,18 @@ export async function generateAnswer(request: AnswerRequest): Promise<Answer> {
   const traceId = randomUUID().replaceAll('-', '');
   const started = Date.now();
   const timings: Record<string, number> = {};
+  const usage: Record<string, number> = {};
+  request.onUsage = raw => {
+    for (const key of ['prompt_tokens', 'completion_tokens', 'total_tokens']) {
+      const value = raw[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) usage[key] = (usage[key] ?? 0) + value;
+    }
+  };
   let snapshot: EvidenceSnapshot | undefined;
   const provider = testProvider ?? { plan: openRouterPlan, generate: openRouterGenerate };
   let terminal = 'failed';
   try {
+    await request.onTrace?.(traceId);
     await request.onProgress?.('retrieving');
     const available = await snapshotVersions(request.ownerId, request.conversationId, request.selectedDocumentVersionIds);
     await request.onSnapshot?.({ versions: available, keywordCandidateIds: [], vectorCandidateIds: [], selectedChunkIds: [] });
@@ -171,7 +179,7 @@ export async function generateAnswer(request: AnswerRequest): Promise<Answer> {
     terminal = 'completed';
     return { ...validated, evidenceSnapshot: snapshot, traceId };
   } finally {
-    void exportAnswerTrace(request.config, { traceId, attemptId: request.attemptId, userMessageId: request.userMessageId, conversationId: request.conversationId,
-      started, terminal, timings, snapshot }).catch(() => undefined);
+    queueAnswerTrace(request.config!, { traceId, attemptId: request.attemptId, userMessageId: request.userMessageId, conversationId: request.conversationId,
+      started, terminal: signal.aborted ? (signal.reason?.name === 'TimeoutError' ? 'failed' : 'interrupted') : terminal, timings, snapshot, retryId: request.retryId, usage });
   }
 }

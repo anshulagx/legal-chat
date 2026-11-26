@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-11-26T14:48:52.622Z",
+  "scanner": "axe-core WCAG 2 A/AA, 2.1 AA, 2.2 AA",
+  "surfaces": [
+    {
+      "surface": "signup",
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "surface": "login",
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "surface": "chat",
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "surface": "source viewer",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                "dialog > p"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "admin",
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "keyboard": [
+    "Signup email → password follows Tab order.",
+    "Citation Enter opens source; Escape closes and returns focus; tooltip Escape dismisses.",
+    "Partial failure → explicit retry keeps one question and distinct failed/completed replies; obsolete retry control disappears.",
+    "Stop reply produces an interrupted attempt and offers retry.",
+    "429 in an existing conversation keeps the optimistic question and disables retry until the matching countdown expires."
+  ],
+  "reflow": [
+    {
+      "surface": "signup",
+      "width": 320,
+      "overflow": false,
+      "overflowNodes": []
+    },
+    {
+      "surface": "signup",
+      "zoomPercent": 200,
+      "overflow": false
+    },
+    {
+      "surface": "login",
+      "width": 320,
+      "overflow": false,
+      "overflowNodes": []
+    },
+    {
+      "surface": "login",
+      "zoomPercent": 200,
+      "overflow": false
+    },
+    {
+      "surface": "chat",
+      "width": 320,
+      "overflow": false,
+      "overflowNodes": []
+    },
+    {
+      "surface": "chat",
+      "zoomPercent": 200,
+      "overflow": false
+    },
+    {
+      "surface": "source viewer",
+      "width": 320,
+      "overflow": false,
+      "overflowNodes": []
+    },
+    {
+      "surface": "source viewer",
+      "zoomPercent": 200,
+      "overflow": false
+    },
+    {
+      "surface": "admin",
+      "width": 320,
+      "overflow": false,
+      "overflowNodes": []
+    },
+    {
+      "surface": "admin",
+      "zoomPercent": 200,
+      "overflow": false
+    }
+  ],
+  "screenReader": "BLOCKED: requires an observed operator walkthrough"
+}

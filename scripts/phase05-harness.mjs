@@ -8,7 +8,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 
 export { ObjectId };
 export const hash = value => createHash('sha256').update(value).digest('hex');
-export async function setup(t) {
+export async function setup(t, options = {}) {
   const uri = process.env.QA_MONGODB_URI ?? 'mongodb://127.0.0.1:27028/?replicaSet=legalChatQA';
   const database = `legal_chat_qa05_${randomUUID().replaceAll('-', '')}`;
   const mongo = new MongoClient(uri, { serverSelectionTimeoutMS: 4000 });
@@ -18,15 +18,17 @@ export async function setup(t) {
   const port = socket.address().port;await new Promise(resolve => socket.close(resolve));
   const base = `http://127.0.0.1:${port}`;
   const adminCredentials = { email: 'admin@example.test', password: randomBytes(24).toString('hex') };
-  const child = fork(new URL('./phase05-fixture.mjs', import.meta.url), { execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: {
+  const restartSecret = randomBytes(32).toString('hex');
+  let child = fork(new URL(options.fixture ?? './phase05-fixture.mjs', import.meta.url), { execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: {
     NODE_ENV: 'test', PORT: String(port), APP_ORIGIN: base, MONGODB_URI: uri, MONGODB_DB_NAME: database,
-    JWT_SECRET: randomBytes(32).toString('hex'), JWT_ISSUER: 'qa05', JWT_AUDIENCE: 'qa05', JWT_TTL_SECONDS: '900',
+    JWT_SECRET: restartSecret, JWT_ISSUER: 'qa05', JWT_AUDIENCE: 'qa05', JWT_TTL_SECONDS: '900',
     ADMIN_SEED_EMAIL: adminCredentials.email, ADMIN_SEED_PASSWORD: adminCredentials.password,
-    AUTH_LOGIN_LIMIT: '100', AUTH_LOGIN_WINDOW_SECONDS: '60',
+    AUTH_LOGIN_LIMIT: '100', AUTH_LOGIN_WINDOW_SECONDS: '60', CHAT_GENERATION_LIMIT: '100',
+    ...options.env,
     OPENROUTER_API_KEY: 'fixture-only', OPENROUTER_CHAT_MODEL: 'fixture/chat',
   } });
   let output = '';child.stdout.on('data', value => output += value);child.stderr.on('data', value => output += value);
-  const exited = once(child, 'exit');
+  let exited = once(child, 'exit');
   let stopped = false;
   async function stop() {
     if (stopped) return;stopped = true;
@@ -68,7 +70,24 @@ export async function setup(t) {
     if (scope === 'shared') await db.collection('adminevents').insertOne({ action: 'publish', versionId: vid, documentId: did });
     return { versionId: String(vid), documentId: String(did), passageId: pid, chunkId: cid, text };
   }
-  return { call, db, a, b, admin, conversation, seed, stop, base };
+  return { call, db, a, b, admin, conversation, seed, stop, base,
+    async restart() {
+      child.kill('SIGKILL'); await exited;
+      child = fork(new URL(options.fixture ?? './phase05-fixture.mjs', import.meta.url), { execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: {
+        NODE_ENV: 'test', PORT: String(port), APP_ORIGIN: base, MONGODB_URI: uri, MONGODB_DB_NAME: database,
+        JWT_SECRET: restartSecret, JWT_ISSUER: 'qa05', JWT_AUDIENCE: 'qa05', JWT_TTL_SECONDS: '900',
+        ADMIN_SEED_EMAIL: adminCredentials.email, ADMIN_SEED_PASSWORD: adminCredentials.password,
+        AUTH_LOGIN_LIMIT: '100', AUTH_LOGIN_WINDOW_SECONDS: '60', CHAT_GENERATION_LIMIT: '100', ...options.env,
+        OPENROUTER_API_KEY: 'fixture-only', OPENROUTER_CHAT_MODEL: 'fixture/chat',
+      } });
+      child.stdout.on('data', value => output += value); child.stderr.on('data', value => output += value);
+      exited = once(child, 'exit');
+      const until = Date.now() + 15000;
+      while ((await call('/health/ready').catch(() => null))?.status !== 200) {
+        assert.ok(child.exitCode === null && Date.now() < until, `Restart failed: ${output}`); await delay(30);
+      }
+    },
+  };
 }
 export async function json(response, status = 200) { assert.equal(response.status, status);return response.json(); }
 export async function stream(response, onEvent) {

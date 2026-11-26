@@ -14,6 +14,12 @@ type Source = { text: string; quote: string; filename: string; label: string; fi
 export function CitationLink({ citation, open }: { citation: Citation; open: (citation: Citation) => void }) {
   const [preview, setPreview] = useState(false);
   const previewId = useId();
+  useEffect(() => {
+    if (!preview) return;
+    const dismiss = (event: KeyboardEvent) => { if (event.key === 'Escape') setPreview(false); };
+    document.addEventListener('keydown', dismiss);
+    return () => document.removeEventListener('keydown', dismiss);
+  }, [preview]);
   return <span className="citation-anchor" onMouseEnter={() => setPreview(true)} onMouseLeave={() => setPreview(false)}>
     <button type="button" className="citation-button" aria-label={`View source: ${citation.filename}${citation.page ? `, page ${citation.page}` : ''}`}
       aria-describedby={preview ? previewId : undefined} onFocus={() => setPreview(true)} onBlur={() => setPreview(false)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setPreview(false); } }} onClick={() => open(citation)}>

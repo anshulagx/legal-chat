@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-11-26T14:45:33.256Z",
+  "fictionalContentOnly": true,
+  "ingestion": "PASS",
+  "readback": "PASS",
+  "masking": "PASS",
+  "turnId": "d5d6cfdb-f04b-4a73-a4bf-df349c4e02f3",
+  "retryHash": "2450f544ad6476a5d8961dbc45501a1d73e5fb9c730372037f8c88eb59684afe",
+  "traces": [
+    {
+      "traceId": "39b8d6598bfc4b3bbf5aaf4cdf3b709b",
+      "terminal": "failed",
+      "retry": false
+    },
+    {
+      "traceId": "f04b08659c0b4326be6232706a1b514b",
+      "terminal": "completed",
+      "retry": true
+    }
+  ],
+  "observationCounts": [
+    6,
+    6
+  ]
+}

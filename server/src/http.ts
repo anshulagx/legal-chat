@@ -4,17 +4,21 @@ import type { ErrorRequestHandler, RequestHandler, Response } from 'express';
 export class HttpError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly retryAfterSeconds?: number;
   readonly fields?: Record<string, string>;
 
-  constructor(status: number, code: string, message: string, fields?: Record<string, string>) {
+  constructor(status: number, code: string, message: string, fields?: Record<string, string>, retryAfterSeconds?: number) {
     super(message);
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
 export function sendError(res: Response, error: HttpError, retryAfterSeconds?: number) {
+  retryAfterSeconds ??= error.retryAfterSeconds;
+  if (retryAfterSeconds) res.set('Retry-After', String(retryAfterSeconds));
   res.status(error.status).json({
     code: error.code,
     message: error.message,

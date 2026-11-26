@@ -103,9 +103,8 @@ owned thread or active shared knowledge. The ordered pair defines comparison sid
 Thread creation, sequence allocation, user turn and assistant attempt are one
 MongoDB transaction. The answer adapter runs only after commit. Completion or
 adapter failure atomically records the terminal result and releases the thread.
-No model calls occur in Phase 02. Explicit failed-attempt retry and recovery of
-active attempts after a process crash are Phase 07 work; a completed turn is
-durable across restarts now.
+No model calls occur in the Phase 02 fixture. Phase 07 adds explicit retries,
+cancellation and leased recovery of active attempts after a process crash.
 
 ## Phase 02 QA
 
@@ -465,6 +464,70 @@ node --env-file=.env scripts/phase05-live-trial.mjs
 
 This makes seven small hosted chat requests with fictional material and writes
 sanitized results to `qa/phase05-live-model-trial.json`. Review the phase QA report
-for the separate live retrieval, browser and regression verdicts. Cancellation,
-restart reconciliation, explicit failed-attempt retry and generation throttling
-remain phase 07 scope.
+for the separate live retrieval, browser and regression verdicts. Phase 07
+recovery controls and evidence are documented below.
+
+
+## Phase 07 · Recovery and operational controls
+
+Use Node 22 or newer (`nvm use`). `npm run build` compiles the server and client;
+`npm run test:wave-07` runs isolated MongoDB integration tests plus content masking
+and bounded telemetry-flush tests. Set `QA_MONGODB_URI` to a disposable replica set
+(the default for phase 07 is `mongodb://127.0.0.1:27028/?replicaSet=legalChatQA`).
+Fixtures and all fault injection are installed only in `NODE_ENV=test` processes.
+
+- `POST /chat/messages/:userMessageId/retry` accepts `{ "retryId": "<unique client ID>" }`.
+  An owned failed/interrupted turn receives one new assistant attempt. Repeated
+  retry IDs replay the same attempt, including concurrent requests. The original
+  question, selections and all earlier attempt paragraphs remain in history.
+  A retry takes a fresh authorized evidence snapshot; selected IDs cannot grant
+  new source access. The user turn points to its latest attempt.
+- `POST /chat/messages/:assistantAttemptId/cancel` with `{}` interrupts an owned
+  active attempt. Disconnecting the answer request also aborts generation.
+  Validated paragraphs remain saved. The client offers Stop reply while generating
+  and Retry reply after failure/interruption, including after reopening history.
+- `CHAT_GENERATION_LIMIT` and `CHAT_GENERATION_WINDOW_SECONDS` default to 10 per
+  600 seconds per authenticated user. Exact send/retry replays bypass the limiter.
+  Limits use the single-process in-memory store and reset on restart; use a shared
+  rate store before scaling web instances. One active attempt per thread is
+  enforced separately in MongoDB transactions.
+- `CHAT_ATTEMPT_LEASE_MS` defaults to 90 seconds. A running attempt renews every
+  third of the lease. Startup, periodic cleanup and subsequent chat requests
+  reconcile expired leases as interrupted. An unexpired lease survives restart
+  until expiry; open history polls while generation is pending. Terminal writes
+  are fenced by the active attempt and lease, so obsolete work cannot complete
+  a replacement attempt.
+- Immediate answer failures return retryable HTTP 503 before SSE headers.
+  Provider throttling returns 429 and `Retry-After` when known; after SSE starts,
+  failures use a terminal error event with attempt IDs and retry delay. A brief
+  100 ms admission window permits immediate failures to preserve HTTP status;
+  slower generation flushes accepted/progress and heartbeats. JSON failures use
+  the corresponding 503/429 status and retain the durable result IDs in the body.
+
+Langfuse exports attempt, original turn and conversation IDs, a SHA-256 digest of
+client retry IDs, branch ranks, timings, supplied token counts and terminal status.
+Failed attempts retain their trace ID. Export uses a strict allowlist before
+serialization, never questions, passages, filenames, signed forms, cookies or
+credentials. Full prompt/output tracing is not exposed. Export failure does not
+block answers. At most 100 exports may be pending, each has a 5-second deadline,
+and shutdown waits at most 1.5 seconds for telemetry.
+
+Optional browser checks use isolated tooling, not application dependencies:
+
+```sh
+npm install --prefix /tmp/legal-chat-browser --no-audit --no-fund playwright-core axe-core@4.10.3
+QA_PLAYWRIGHT_MODULE=/tmp/legal-chat-browser/node_modules/playwright-core/index.mjs \
+QA_AXE_PATH=/tmp/legal-chat-browser/node_modules/axe-core/axe.min.js \
+node scripts/phase07-browser.mjs
+```
+
+Set `QA_CHROME_PATH` when Chrome is not installed at the macOS default path.
+The scanner bypasses CSP only in its isolated browser context to inject axe.
+Application CSP remains enabled. Checks cover signup, login, chat, source viewer
+and admin, 320px reflow, citation focus/escape behavior, retry and cancellation.
+Axe cannot establish full accessibility conformance. Complete the keyboard,
+zoom and observed screen-reader walkthrough in the
+[phase 07 QA guide](qa/QA-07-failure-recovery-observability-and-accessibility.md).
+Run `node --env-file=.env scripts/phase07-live-telemetry.mjs` for two fictional,
+content-free Cloud trace exports/readbacks; it does not call a chat model.
+See [phase 07 evidence and remaining gate checks](qa/phase07-qa-report.md).

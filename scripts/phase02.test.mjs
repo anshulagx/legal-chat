@@ -34,7 +34,7 @@ async function launch(t, { paused = false } = {}) {
     MONGODB_URI: mongoUri, MONGODB_DB_NAME: database,
     JWT_SECRET: secret, JWT_ISSUER: 'qa02', JWT_AUDIENCE: 'qa02-browser', JWT_TTL_SECONDS: '900',
     ADMIN_SEED_EMAIL: admin.email, ADMIN_SEED_PASSWORD: admin.password,
-    AUTH_LOGIN_LIMIT: '100', AUTH_LOGIN_WINDOW_SECONDS: '60', QA_PAUSE_ANSWERS: String(paused),
+    AUTH_LOGIN_LIMIT: '100', AUTH_LOGIN_WINDOW_SECONDS: '60', CHAT_GENERATION_LIMIT: '100', QA_PAUSE_ANSWERS: String(paused),
   } });
   const events = [];
   app.on('message', message => events.push(message));
@@ -240,11 +240,11 @@ test('Phase 02 durable conversation integration', { timeout: 120000 }, async t =
     await t.test('adapter failure preserves the user turn, terminal result and unlocks next send', async () => {
       await one.control('fail-next-answer');
       const body = { message: 'Fictional adapter failure', clientMessageId: key() };
-      const result = await json(await one.call('/chat/send', { cookie: a.cookie, body }));
+      const result = await json(await one.call('/chat/send', { cookie: a.cookie, body }), 503);
       assert.equal(result.status, 'failed');
       assert.equal(result.failureCode, 'ANSWER_UNAVAILABLE');
       const before = countGenerations(one, two);
-      assert.deepEqual(await json(await two.call('/chat/send', { cookie: a.cookie, body })), result);
+      assert.deepEqual(await json(await two.call('/chat/send', { cookie: a.cookie, body }), 503), result);
       assert.equal(countGenerations(one, two), before);
       await json(await one.call('/chat/send', { cookie: a.cookie,
         body: { message: 'Question after failure', clientMessageId: key(), conversationId: result.conversationId } }));
