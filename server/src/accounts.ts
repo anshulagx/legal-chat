@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import type { Config } from './config.ts';
+import { collectionName } from './collections.ts';
 
 export const passwordCost = 12;
 export const User = mongoose.model('User', new Schema({
@@ -8,13 +9,13 @@ export const User = mongoose.model('User', new Schema({
   passwordHash: { type: String, required: true, select: false },
   role: { type: String, enum: ['customer', 'admin'], required: true },
   createdAt: { type: Date, default: Date.now },
-}));
+}), collectionName('users'));
 
 export const Session = mongoose.model('Session', new Schema({
   userId: { type: Schema.Types.ObjectId, required: true },
   expiresAt: { type: Date, required: true, expires: 0 },
   revokedAt: { type: Date, default: null },
-}));
+}), collectionName('sessions'));
 
 export function isDuplicate(error: unknown) {
   return error instanceof mongoose.mongo.MongoServerError && error.code === 11000;

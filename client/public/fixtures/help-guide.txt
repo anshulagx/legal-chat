@@ -1,0 +1,9 @@
+Fictional contract workspace help guide
+
+1. Exporting contracts
+To export your contracts, open Settings, select Data export, and choose Download ZIP. The ZIP contains the stored contract records and their original files.
+
+2. After termination
+The export option remains available for 14 days after termination.
+
+This is fictional application test data.

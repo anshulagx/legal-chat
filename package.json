@@ -14,7 +14,9 @@
     "start": "node server/dist/index.js",
     "test:phase01": "node --test scripts/phase01.test.mjs",
     "test:wave-02": "node --test scripts/phase02.test.mjs",
-    "test:wave-03": "node --test scripts/phase03.test.mjs"
+    "test:wave-03": "node --test scripts/phase03.test.mjs",
+    "test:wave-04": "node --test scripts/phase04.test.mjs",
+    "bootstrap": "node --env-file=.env scripts/bootstrap.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -34,8 +36,10 @@
     "bcryptjs": "^3.0.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "js-tiktoken": "^1.0.21",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.19.1",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   }

@@ -1,4 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
+import { collectionName } from './collections.ts';
 
 const conversationSchema = new Schema({
   ownerId: { type: Schema.Types.ObjectId, required: true },
@@ -10,7 +11,7 @@ const conversationSchema = new Schema({
   attachmentCount: { type: Number, default: 0 },
 });
 conversationSchema.index({ ownerId: 1, updatedAt: -1, _id: -1 });
-export const Conversation = mongoose.model('Conversation', conversationSchema);
+export const Conversation = mongoose.model('Conversation', conversationSchema, collectionName('conversations'));
 
 const messageSchema = new Schema({
   conversationId: { type: Schema.Types.ObjectId, required: true },
@@ -33,7 +34,7 @@ messageSchema.index({ ownerId: 1, clientMessageId: 1 }, {
   unique: true, partialFilterExpression: { role: 'user', clientMessageId: { $type: 'string' } },
 });
 messageSchema.index({ ownerId: 1, createdAt: 1, _id: 1 });
-export const Message = mongoose.model('Message', messageSchema);
+export const Message = mongoose.model('Message', messageSchema, collectionName('messages'));
 
 export async function initializeConversations() {
   const topology = await mongoose.connection.db!.admin().command({ hello: 1 });

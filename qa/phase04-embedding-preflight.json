@@ -1,0 +1,24 @@
+{
+  "observedAt": "2026-11-26T02:13:57.687Z",
+  "environment": "development providers with disposable Atlas probe collections",
+  "embedding": {
+    "configuredModel": "openai/text-embedding-3-small",
+    "returnedModel": "text-embedding-3-small",
+    "configuredDimensions": 1536,
+    "measuredDimensions": 1536,
+    "allValuesFinite": true,
+    "vectorChecksum": "f6f445f3328f3ad62ef95fdd1931e98c7ba5542e2dfb65f274ba55281441973d",
+    "requests": 1,
+    "promptTokens": 12,
+    "result": "PASS"
+  },
+  "atlas": {
+    "transactionRollback": "PASS",
+    "filteredKeywordExpectedIdAndExcludedDecoy": "PASS",
+    "filteredVectorExpectedIdAndExcludedDecoy": "PASS",
+    "dimensions": 1536,
+    "probeCollectionsRemoved": true,
+    "result": "PASS"
+  },
+  "scope": "Provider capability preflight; application behavior requires separate Phase 04 QA."
+}

@@ -9,6 +9,8 @@ import { chatRouter } from './chat.ts';
 import { initializeConversations } from './conversations.ts';
 import { cleanupUploads, initializeUploads, uploadRouter } from './uploads.ts';
 import { createStorage } from './storage.ts';
+import { initializeIndexRecords } from './index-records.ts';
+import { startIndexWorker } from './index-worker.ts';
 import { readConfig } from './config.ts';
 import { errorHandler, HttpError, requestMetadata } from './http.ts';
 
@@ -27,6 +29,7 @@ const storageOrigin = config.storage ? `https://${config.storage.bucket}.s3.${co
 const assets = fileURLToPath(new URL('../../client/dist/', import.meta.url));
 let initialized = false;
 let stopping = false;
+let stopWorker = () => {};
 const available = () => initialized && !stopping && mongoose.connection.readyState === 1;
 
 app.disable('x-powered-by');
@@ -79,8 +82,10 @@ async function connectDatabase() {
       await initializeAccounts(currentConfig);
       await initializeConversations();
       await initializeUploads();
+      await initializeIndexRecords();
       if (storage) await storage.verify(currentConfig.origin);
       initialized = true;
+      stopWorker = startIndexWorker(currentConfig, storage);
       console.info(JSON.stringify({ event: 'accounts_ready' }));
     } catch {
       console.error(JSON.stringify({ event: 'accounts_unavailable' }));
@@ -99,6 +104,7 @@ const cleanupTimer = setInterval(() => {
 async function shutdown() {
   if (stopping) return;
   stopping = true;
+  stopWorker();
   clearInterval(cleanupTimer);
   const deadline = setTimeout(() => process.exit(1), 5000).unref();
   await new Promise<void>(done => server.close(() => done()));

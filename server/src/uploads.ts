@@ -8,29 +8,39 @@ import type { Config } from './config.ts';
 import { Conversation } from './conversations.ts';
 import { HttpError, sendError } from './http.ts';
 import { createStorage, maxOriginalBytes, uploadNow, type Storage } from './storage.ts';
+import { collectionName } from './collections.ts';
+import { AdminEvent } from './index-records.ts';
 
 const documentSchema = new Schema({
   ownerId: { type: Schema.Types.ObjectId, required: true }, scope: { type: String, enum: ['private', 'shared'], required: true },
   conversationId: Schema.Types.ObjectId, title: { type: String, required: true },
-  activeVersionId: { type: Schema.Types.ObjectId, default: null }, createdAt: { type: Date, default: Date.now },
+  activeVersionId: { type: Schema.Types.ObjectId, default: null }, archivedAt: { type: Date, default: null },
+  fixtureId: String, operationToken: String, revisionCounter: { type: Number, default: 1 }, createdAt: { type: Date, default: Date.now },
 });
-export const Document = mongoose.model('Document', documentSchema);
+documentSchema.index({ fixtureId: 1 }, { unique: true, partialFilterExpression: { fixtureId: { $type: 'string' } } });
+export const Document = mongoose.model('Document', documentSchema, collectionName('documents'));
 const versionSchema = new Schema({
   documentId: { type: Schema.Types.ObjectId, required: true }, revision: { type: Number, default: 1 },
   ownerId: { type: Schema.Types.ObjectId, required: true }, scope: { type: String, required: true }, conversationId: Schema.Types.ObjectId,
   clientUploadId: { type: String, required: true }, requestHash: { type: String, required: true },
   filename: { type: String, required: true }, mime: { type: String, required: true }, size: { type: Number, required: true },
   key: { type: String, required: true }, expiresAt: { type: Date, required: true },
-  state: { type: String, enum: ['reserved', 'queued', 'expired'], default: 'reserved' },
+  state: { type: String, enum: ['reserved', 'queued', 'indexing', 'ready', 'failed', 'expired'], default: 'reserved' },
   s3VersionId: String, hash: String, queuedAt: Date, cleanedAt: Date,
+  baseVersionId: { type: Schema.Types.ObjectId, default: null }, activeIndexGeneration: String,
+  extractorVersion: String, chunkingVersion: String, embeddingModel: String, dimensions: Number,
+  failureCode: String, failureReason: String, indexingStatus: String, fixtureId: String,
 });
 versionSchema.index({ ownerId: 1, clientUploadId: 1 }, { unique: true });
 versionSchema.index({ documentId: 1, revision: 1 }, { unique: true });
 versionSchema.index({ state: 1, expiresAt: 1 });
 versionSchema.index({ conversationId: 1, scope: 1 });
-export const DocumentVersion = mongoose.model('DocumentVersion', versionSchema);
-const jobSchema = new Schema({ versionId: { type: Schema.Types.ObjectId, required: true, unique: true }, state: { type: String, default: 'queued' }, createdAt: { type: Date, default: Date.now } });
-export const IndexJob = mongoose.model('IndexJob', jobSchema);
+export const DocumentVersion = mongoose.model('DocumentVersion', versionSchema, collectionName('documentversions'));
+const jobSchema = new Schema({ versionId: { type: Schema.Types.ObjectId, required: true, unique: true }, state: { type: String, default: 'queued' },
+  generation: String, leaseToken: String, leaseUntil: Date, retryAt: { type: Date, default: Date.now }, attempts: { type: Number, default: 0 },
+  failureCode: String, createdAt: { type: Date, default: Date.now } });
+jobSchema.index({ state: 1, retryAt: 1, leaseUntil: 1 });
+export const IndexJob = mongoose.model('IndexJob', jobSchema, collectionName('indexjobs'));
 type Version = InstanceType<typeof DocumentVersion>;
 const objectId = /^[a-f0-9]{24}$/;
 const notFound = () => new HttpError(404, 'NOT_FOUND', 'This upload could not be found.');
@@ -44,6 +54,8 @@ function view(version: Version) {
     ...(version.conversationId ? { conversationId: String(version.conversationId) } : {}),
     filename: version.filename, mime: version.mime, size: version.size, status: version.state,
     expiresAt: version.expiresAt.toISOString(), ...(version.hash ? { checksum: version.hash } : {}),
+    revision: version.revision, activeIndexGeneration: version.activeIndexGeneration, indexingStatus: version.indexingStatus,
+    failureCode: version.failureCode, ...(version.failureReason ? { failureReason: version.failureReason } : {}),
     ...(version.state === 'expired' ? { failureReason: 'Upload expired. Choose the file again.' } : {}),
   };
 }
@@ -66,7 +78,7 @@ async function ownedConversation(id: string, ownerId: string) {
   if (!objectId.test(id) || !await Conversation.exists({ _id: id, ownerId })) throw notFound();
 }
 async function reserve(ownerId: string, scope: 'private' | 'shared', conversationId: string | undefined,
-  input: ReturnType<typeof parse>, prefix: string) {
+  input: ReturnType<typeof parse>, prefix: string, targetDocumentId?: string) {
   const existing = await DocumentVersion.findOne({ ownerId, clientUploadId: input.clientUploadId });
   if (existing) {
     if (existing.requestHash !== input.requestHash) throw new HttpError(409, 'IDEMPOTENCY_CONFLICT', 'This upload ID was already used for different input.');
@@ -84,10 +96,18 @@ async function reserve(ownerId: string, scope: 'private' | 'shared', conversatio
           { $inc: { attachmentCount: 1 }, $set: { updatedAt: uploadNow() } }, { session });
         if (!reserved.modifiedCount) throw new HttpError(409, 'ATTACHMENT_LIMIT', 'This chat already has five files or pending uploads.');
       }
-      const documentId = new Types.ObjectId(), versionId = new Types.ObjectId();
-      await Document.create([{ _id: documentId, ownerId, scope, conversationId, title: input.filename }], { session });
+      let documentId = new Types.ObjectId(), revision = 1, baseVersionId: Types.ObjectId | null = null;
+      const versionId = new Types.ObjectId();
+      if (targetDocumentId) {
+        const target = await Document.findOneAndUpdate({ _id: targetDocumentId, scope: 'shared', archivedAt: null }, [
+          { $set: { revisionCounter: { $add: [{ $ifNull: ['$revisionCounter', 1] }, 1] } } },
+        ], { session, new: true });
+        if (!target) throw notFound();
+        documentId = target._id; revision = target.revisionCounter; baseVersionId = target.activeVersionId ?? null;
+      } else await Document.create([{ _id: documentId, ownerId, scope, conversationId, title: input.filename }], { session });
       const [version] = await DocumentVersion.create([{ _id: versionId, documentId, ownerId, scope, conversationId,
-        ...input, key: `${prefix}originals/${randomUUID()}`, expiresAt: new Date(uploadNow().getTime() + 300000) }], { session });
+        ...input, revision, baseVersionId, key: `${prefix}originals/${randomUUID()}`, expiresAt: new Date(uploadNow().getTime() + 300000) }], { session });
+      if (scope === 'shared') await AdminEvent.create([{ actorId: ownerId, action: targetDocumentId ? 'stage-replacement' : 'upload', documentId, versionId }], { session });
       return version;
     }, { writeConcern: { w: 'majority' } });
   } catch (error) {
@@ -99,18 +119,18 @@ async function reserve(ownerId: string, scope: 'private' | 'shared', conversatio
   }
 }
 
-async function pin(version: Version, storage: Storage) {
-  if (version.state === 'queued') return version;
+export async function pin(version: Version, storage: Storage) {
+  if (version.s3VersionId && version.hash) return version;
   if (version.state === 'expired') throw expired();
   let original;
   try { original = await storage.original(version.key); }
   catch (error) {
     const winner = await DocumentVersion.findById(version._id);
-    if (winner?.state === 'queued') return winner;
+    if (winner?.s3VersionId && winner.hash) return winner;
     throw error;
   }
   const currentWinner = await DocumentVersion.findById(version._id);
-  if (currentWinner?.state === 'queued') return currentWinner;
+  if (currentWinner?.s3VersionId && currentWinner.hash) return currentWinner;
   if (currentWinner?.state === 'expired') throw expired();
   if (!original) {
     if (version.expiresAt > uploadNow()) throw new HttpError(409, 'UPLOAD_NOT_RECEIVED', 'The file has not arrived yet. Retry completing this upload.');
@@ -119,7 +139,7 @@ async function pin(version: Version, storage: Storage) {
       if (released.modifiedCount && version.conversationId) await Conversation.updateOne({ _id: version.conversationId, attachmentCount: { $gt: 0 } }, { $inc: { attachmentCount: -1 } }, { session });
     });
     const current = await DocumentVersion.findById(version._id);
-    if (current?.state === 'queued') return current;
+    if (current?.s3VersionId && current.hash) return current;
     throw expired();
   }
   if (original.size !== version.size || original.mime !== version.mime || !original.versionId || original.versionId === 'null'
@@ -158,7 +178,7 @@ export async function cleanupUploads(storage: Storage, owned?: { ownerId: string
     }
   }
   if (owned) return;
-  const abandoned = await DocumentVersion.find({ state: { $in: ['expired', 'queued'] }, cleanedAt: { $exists: false }, expiresAt: { $lt: new Date(uploadNow().getTime() - cleanupGraceMs) } }).limit(50);
+  const abandoned = await DocumentVersion.find({ state: { $ne: 'reserved' }, cleanedAt: { $exists: false }, expiresAt: { $lt: new Date(uploadNow().getTime() - cleanupGraceMs) } }).limit(50);
   for (const version of abandoned) {
     // Terminal states never revert to reserved. Keep their records indefinitely:
     // they fence late callbacks, retain idempotency and track replayed versions.
@@ -172,7 +192,7 @@ export async function cleanupUploads(storage: Storage, owned?: { ownerId: string
 
 export function uploadRouter(config: Config, available: () => boolean, storage: Storage | undefined) {
   const router = express.Router();
-  router.use((req, _res, next) => /^\/(?:uploads\/|admin\/documents(?:\/|$)|conversations\/[^/]+\/attachments(?:\/|$))/.test(req.path) ? next() : next('router'));
+  router.use((req, _res, next) => /^\/(?:uploads\/|admin\/(?:documents|document-versions)(?:\/|$)|conversations\/[^/]+\/attachments(?:\/|$)|knowledge\/starter-questions$)/.test(req.path) ? next() : next('router'));
   router.use(requestGuard(config, available), requireSession(config));
   router.use((req, res, next) => {
     if (req.path.startsWith('/admin/') && res.locals.account.role !== 'admin') return next(new HttpError(403, 'ADMIN_REQUIRED', 'Administrator access is required.'));
@@ -194,10 +214,15 @@ export function uploadRouter(config: Config, available: () => boolean, storage: 
     const conversationId = shared ? undefined : String(req.params.id);
     if (conversationId) await ownedConversation(conversationId, ownerId);
     const input = parse(req.body, shared ? 'shared' : 'private', conversationId);
+    const target = shared && req.params.id ? String(req.params.id) : undefined;
+    if (target) {
+      if (!objectId.test(target)) throw notFound();
+      input.requestHash = createHash('sha256').update(`${input.requestHash}:${target}`).digest('hex');
+    }
     if (!storage || !config.storage) throw unavailable();
     // Reconcile expired reservations before allocating another bounded slot.
     await cleanupUploads(storage, { ownerId, conversationId });
-    let version = await reserve(ownerId, shared ? 'shared' : 'private', conversationId, input, config.storage.prefix);
+    let version = await reserve(ownerId, shared ? 'shared' : 'private', conversationId, input, config.storage.prefix, target);
     if (version.state === 'reserved' && version.expiresAt <= uploadNow()) {
       version = await pin(version, storage);
     }
@@ -207,6 +232,7 @@ export function uploadRouter(config: Config, available: () => boolean, storage: 
   }
   router.post('/conversations/:id/attachments', limiter, (req, res) => create(req, res, false));
   router.post('/admin/documents', limiter, (req, res) => create(req, res, true));
+  router.post('/admin/documents/:id/versions', limiter, (req, res) => create(req, res, true));
   router.get('/conversations/:id/attachments', async (req, res) => {
     await ownedConversation(String(req.params.id), res.locals.account.id);
     const versions = await DocumentVersion.find({ conversationId: req.params.id, scope: 'private', ownerId: res.locals.account.id }).sort({ _id: 1 });
@@ -214,7 +240,64 @@ export function uploadRouter(config: Config, available: () => boolean, storage: 
   });
   router.get('/admin/documents', async (_req, res) => {
     const versions = await DocumentVersion.find({ scope: 'shared' }).sort({ _id: -1 });
-    res.json({ items: versions.map(view) });
+    const documents = await Document.find({ _id: { $in: versions.map(version => version.documentId) } });
+    res.json({ items: versions.map(version => { const document = documents.find(doc => doc.id === String(version.documentId));
+      return { ...view(version), baseVersionId: version.baseVersionId, activeVersionId: document?.activeVersionId,
+        isActive: String(document?.activeVersionId) === version.id, archivedAt: document?.archivedAt?.toISOString() ?? null }; }) });
+  });
+  router.delete('/admin/documents/:id', async (req, res) => {
+    if (!objectId.test(String(req.params.id))) throw notFound();
+    await mongoose.connection.transaction(async session => {
+      const document = await Document.findOneAndUpdate({ _id: req.params.id, scope: 'shared', archivedAt: null }, { $set: { archivedAt: uploadNow() } }, { session, new: true });
+      if (!document) { if (!await Document.exists({ _id: req.params.id, scope: 'shared' }).session(session)) throw notFound(); return; }
+      const versions = await DocumentVersion.find({ documentId: document._id }).session(session);
+      await IndexJob.updateMany({ versionId: { $in: versions.map(version => version._id) }, state: { $in: ['queued', 'running'] } },
+        { $set: { state: 'cancelled', failureCode: 'DOCUMENT_ARCHIVED' }, $unset: { leaseToken: '', leaseUntil: '' } }, { session });
+      await DocumentVersion.updateMany({ documentId: document._id, state: { $in: ['queued', 'indexing'] } },
+        { $set: { state: 'failed', indexingStatus: 'failed', failureCode: 'DOCUMENT_ARCHIVED', failureReason: 'This document was archived. Its original remains available for historical references.' } }, { session });
+      await DocumentVersion.updateMany({ documentId: document._id, state: 'ready', indexingStatus: { $in: ['queued', 'indexing'] } },
+        { $set: { indexingStatus: 'cancelled', failureCode: 'DOCUMENT_ARCHIVED', failureReason: 'This document was archived, so its pending search rebuild was cancelled.' } }, { session });
+      await AdminEvent.create([{ actorId: res.locals.account.id, action: 'archive', documentId: document._id, requestId: res.locals.requestId }], { session });
+    });
+    res.status(204).end();
+  });
+  async function retryVersion(req: express.Request, res: express.Response, shared: boolean) {
+    const id = String(req.params.versionId);
+    if (!objectId.test(id)) throw notFound();
+    const version = await DocumentVersion.findById(id);
+    if (!version || version.scope !== (shared ? 'shared' : 'private')) throw notFound();
+    if (!shared) {
+      if (String(version.ownerId) !== res.locals.account.id || String(version.conversationId) !== String(req.params.id)) throw notFound();
+      await ownedConversation(String(req.params.id), res.locals.account.id);
+    }
+    if (!config.indexing) throw new HttpError(409, 'INDEXING_DISABLED', 'Configure indexing before retrying this file.');
+    const document = await Document.findById(version.documentId);
+    if (document?.archivedAt) throw new HttpError(409, 'DOCUMENT_ARCHIVED', 'Archived documents cannot be retried.');
+    if (!version.s3VersionId || !version.hash) throw expired();
+    if (version.indexingStatus !== 'failed' && version.state !== 'failed') throw new HttpError(409, 'INDEXING_ACTIVE', 'This version is not failed.');
+    await mongoose.connection.transaction(async session => {
+      const stillActive = await Document.updateOne({ _id: version.documentId, archivedAt: null }, { $set: { operationToken: randomUUID() } }, { session });
+      if (!stillActive.matchedCount) throw new HttpError(409, 'DOCUMENT_ARCHIVED', 'Archived documents cannot be retried.');
+      const job = await IndexJob.findOneAndUpdate({ versionId: version._id, state: 'failed' },
+        { $set: { state: 'queued', retryAt: uploadNow(), attempts: 0 }, $unset: { leaseToken: '', leaseUntil: '', failureCode: '' } }, { session });
+      if (!job) throw new HttpError(409, 'INDEXING_ACTIVE', 'This indexing job has already been retried.');
+      await DocumentVersion.updateOne({ _id: version._id }, { $set: { indexingStatus: 'queued', ...(version.activeIndexGeneration ? {} : { state: 'queued' }) }, $unset: { failureCode: '', failureReason: '' } }, { session });
+      if (shared) await AdminEvent.create([{ actorId: res.locals.account.id, action: 'retry', documentId: version.documentId, versionId: version._id, requestId: res.locals.requestId }], { session });
+    });
+    res.status(202).json(view((await DocumentVersion.findById(version._id))!));
+  }
+  router.post('/admin/document-versions/:versionId/retry', (req, res) => retryVersion(req, res, true));
+  router.post('/conversations/:id/attachments/:versionId/retry', (req, res) => retryVersion(req, res, false));
+  router.get('/admin/documents/:id/events', async (req, res) => {
+    if (!objectId.test(String(req.params.id))) throw notFound();
+    res.json({ items: await AdminEvent.find({ documentId: req.params.id }).sort({ timestamp: 1, _id: 1 }).select('actorId action documentId versionId timestamp requestId').lean() });
+  });
+  router.get('/knowledge/starter-questions', async (_req, res) => {
+    const documents = await Document.find({ scope: 'shared', fixtureId: { $exists: true }, archivedAt: null, activeVersionId: { $ne: null } });
+    const ready = await DocumentVersion.find({ _id: { $in: documents.map(doc => doc.activeVersionId) }, state: 'ready', activeIndexGeneration: { $exists: true } });
+    const questions = [ { fixture: 'help-guide', question: 'How do I export my contracts?' }, { fixture: 'notice-policy', question: 'What is the notice period?' } ];
+    res.json({ items: questions.flatMap(item => { const document = documents.find(doc => doc.fixtureId === item.fixture); return document && ready.some(version => version.id === String(document.activeVersionId))
+      ? [{ id: item.fixture, question: item.question, documentVersionIds: [String(document.activeVersionId)] }] : []; }) });
   });
   router.post('/uploads/:id/complete', async (req, res) => {
     const id = String(req.params.id);

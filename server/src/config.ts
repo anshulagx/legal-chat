@@ -23,6 +23,12 @@ export function readConfig(env: NodeJS.ProcessEnv) {
       || !/^\d+$/.test(env.UPLOAD_RESERVATION_WINDOW_SECONDS!) || Number(env.UPLOAD_RESERVATION_WINDOW_SECONDS) < 1
       || Number(env.UPLOAD_RESERVATION_WINDOW_SECONDS) > 2147483) throw new Error('Invalid upload configuration.');
   }
+  const indexingEnabled = env.INDEXING_ENABLED === 'true';
+  if (env.INDEXING_ENABLED && !['true', 'false'].includes(env.INDEXING_ENABLED)) throw new Error('Invalid INDEXING_ENABLED.');
+  if (indexingEnabled && (!storageConfigured || !isConfigured(env.OPENROUTER_API_KEY)
+    || !/^[\w.-]+\/[\w.:-]+$/.test(env.OPENROUTER_EMBEDDING_MODEL ?? '')
+    || !/^\d+$/.test(env.OPENROUTER_EMBEDDING_DIMENSIONS ?? '')
+    || Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) < 1 || Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) > 8192)) throw new Error('Invalid or missing indexing configuration.');
 
   return {
     origin: values.APP_ORIGIN,
@@ -40,6 +46,8 @@ export function readConfig(env: NodeJS.ProcessEnv) {
     adminPassword: values.ADMIN_SEED_PASSWORD,
     authLimit: Number(values.AUTH_LOGIN_LIMIT),
     authWindowMs: Number(values.AUTH_LOGIN_WINDOW_SECONDS) * 1000,
+    indexing: indexingEnabled ? { apiKey: env.OPENROUTER_API_KEY!, model: env.OPENROUTER_EMBEDDING_MODEL!,
+      dimensions: Number(env.OPENROUTER_EMBEDDING_DIMENSIONS), leaseMs: 120000, indexWaitMs: 180000 } : undefined,
     storage: storageConfigured ? {
       region: env.AWS_REGION!, bucket: env.S3_BUCKET!, prefix: env.S3_KEY_PREFIX!,
       credentials: { accessKeyId: env.AWS_ACCESS_KEY_ID!, secretAccessKey: env.AWS_SECRET_ACCESS_KEY!, sessionToken: env.AWS_SESSION_TOKEN || undefined },

@@ -56,6 +56,7 @@
   .composer .primary { @apply justify-self-end; }
   .chat-status { @apply min-h-6 text-sm text-[#4b5651]; }
   .send-error { @apply grid justify-items-start gap-3 py-3; }
+  .starter-questions { @apply flex flex-wrap gap-3 py-4; }
   button:disabled { @apply cursor-not-allowed opacity-60; }
   .upload-panel { @apply mt-6 grid min-w-0 gap-3 rounded-xl border border-[#d5ded7] bg-white p-4 text-sm; }
   .upload-panel h2 { @apply font-semibold; }

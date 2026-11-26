@@ -1,0 +1,10 @@
+Fictional workspace notice policy
+Revision 1
+
+1. Notice period
+The Customer must give at least 30 days' written notice before terminating the workspace subscription.
+
+2. Export availability
+The export option remains available for 14 days after termination.
+
+This is fictional application test data.

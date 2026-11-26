@@ -1,0 +1,8 @@
+{
+  "description": "Fictional source excerpts for independent knowledge-base verification.",
+  "answers": [
+    { "fixtureId": "help-guide", "revision": 1, "file": "help-guide.txt", "question": "How do I export my contracts?", "excerpt": "To export your contracts, open Settings, select Data export, and choose Download ZIP." },
+    { "fixtureId": "notice-policy", "revision": 1, "file": "notice-policy-v1.txt", "excerpt": "The Customer must give at least 30 days' written notice before terminating the workspace subscription." },
+    { "fixtureId": "notice-policy", "revision": 2, "file": "notice-policy-v2.txt", "excerpt": "The Customer must give at least 60 days' written notice before terminating the workspace subscription." }
+  ]
+}

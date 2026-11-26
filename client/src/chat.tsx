@@ -24,6 +24,7 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
   const [problem, setProblem] = useState('');
   const [retry, setRetry] = useState<SendBody>();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [starters, setStarters] = useState<{ id: string; question: string }[]>([]);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const focusComposer = useRef(false);
   const viewVersion = useRef(0);
@@ -66,6 +67,16 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
   }
 
   useEffect(() => { void loadConversations(); }, []);
+  useEffect(() => {
+    if (selected) return;
+    async function loadStarters() {
+      try { const result = await request<{ items: { id: string; question: string }[] }>('/knowledge/starter-questions');
+        if (!lifetime.current.signal.aborted) setStarters(result.items); } catch { /* Optional starter availability must not block the composer. */ }
+    }
+    void loadStarters();
+    const timer = setInterval(() => void loadStarters(), 5000);
+    return () => clearInterval(timer);
+  }, [selected]);
 
   async function history(conversationId: string) {
     const collected: Message[] = [];
@@ -166,6 +177,10 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
     <main className={`chat-main ${!selected && !messages.length ? 'fresh-chat' : ''}`}>
       <h1>{title}</h1>
       {!selected && !messages.length && <p className="chat-intro">Start a new support question, or pick up a previous chat.</p>}
+      {!selected && !messages.length && Boolean(starters.length) && <div className="starter-questions" aria-label="Starter questions">
+        {starters.map(item => <button type="button" className="secondary" key={item.id} disabled={sending || uploading || loading || Boolean(retry)}
+          onClick={() => void send({ message: item.question, clientMessageId: crypto.randomUUID() })}>{item.question}</button>)}
+      </div>}
       {loading && <p role="status">Loading this chat…</p>}
       <div className="message-list" aria-label="Messages">
         {messages.map(message => <article className={`message message-${message.role}`} key={message.id}>

@@ -1,6 +1,6 @@
 # Legal Support Chat
 
-## Run Phases 01–03
+## Run Phases 01–04
 
 Use Node 22.22.0 (see `.nvmrc`) and a development MongoDB replica set or Atlas database. Copy
 `.env.example` to `.env` if you do not already have it. For Phase 01 the
@@ -8,6 +8,9 @@ required settings are the environment, origin and port, MongoDB URI and database
 JWT settings, admin seed credentials, and authentication limits. Set
 `APP_ORIGIN=http://localhost:3000` and `PORT=3000` for the default local
 address. Keep a distinct database, origin and signing secret for production.
+Allow the runtime's current outbound IP in Atlas Network Access; it can change
+when the network connection changes. For connection failures, follow the
+[Atlas connection checks](https://www.mongodb.com/docs/atlas/troubleshoot-connection/).
 
 ```sh
 npm ci
@@ -183,7 +186,7 @@ to pinned originals. No originals are stored on the web service's local disk.
 | `GET /conversations/:id/attachments` | Owned filename/type/size/state/checksum metadata. Another account receives 404. |
 | `POST /admin/documents` | Same reservation body for a new shared document. Customer receives 403. |
 | `GET /admin/documents` | Admin-only shared upload list. |
-| `POST /uploads/:uploadId/complete` | Metadata only. Returns 202, pinned version metadata and `queued`. Duplicate/concurrent calls return the same winner. |
+| `POST /uploads/:uploadId/complete` | Metadata only. Returns 202 and the pinned version's current state, initially `queued`. Duplicate/concurrent calls retain that original after indexing. |
 
 Always retry a reservation with its original `clientUploadId` and input; a
 changed payload returns 409. Repeated reservations do not consume extra slots
@@ -203,7 +206,7 @@ It reconciles bytes received without a completion callback before expiring an
 empty reservation and releasing its slot exactly once. An expired empty upload
 requires a new ID. A one-hour grace period precedes deletion of abandoned or
 replayed extra versions. Cleanup deletes only explicit, unpinned S3 versions;
-it checks for live reservations/pinned references, retains queued originals,
+it checks for live reservations/pinned references, retains all pinned originals,
 and keeps terminal MongoDB rows indefinitely for idempotency and orphan tracking.
 New reservation requests reconcile only their owner's expired reservations;
 global garbage collection runs in the background. Transient storage failures
@@ -251,3 +254,135 @@ HTTP endpoints, and storage/clock injection rejects non-test execution. Run
 
 References: [AWS signed POST SDK](https://github.com/aws/aws-sdk-js-v3/tree/main/packages/s3-presigned-post)
 and [S3 version-specific reads](https://docs.aws.amazon.com/AmazonS3/latest/userguide/RetrievingObjectVersions.html).
+
+## Phase 04 indexing and bootstrap
+
+Set `INDEXING_ENABLED=true` together with storage settings and
+`OPENROUTER_API_KEY`, `OPENROUTER_EMBEDDING_MODEL`, and
+`OPENROUTER_EMBEDDING_DIMENSIONS`. The measured development configuration is
+`openai/text-embedding-3-small` with 1,536 dimensions; see the
+[redacted preflight record](qa/phase04-embedding-preflight.json). Nonfinite or
+incorrectly sized vectors are rejected. Omitted/false disables indexing, so
+earlier-phase isolated fixtures require no model access.
+
+After configuration, build and bootstrap the fictional knowledge base:
+
+```sh
+npm run build
+npm run bootstrap
+```
+
+The npm command loads `.env`. To select a separate private environment file:
+
+```sh
+node --env-file=/private/tmp/legal-chat-phase04.qa.env scripts/bootstrap.mjs
+node --env-file=/private/tmp/legal-chat-phase04.qa.env server/dist/index.js
+```
+
+Bootstrap seeds an export help guide and two notice-policy revisions with
+stable fixture IDs and content hashes. It pins originals, waits for indexing,
+and publishes the ready revision. Repeating bootstrap preserves identities and
+active pointers; changed fixture content requires a new revision. Files and the
+answer key are in `client/public/fixtures/`. Starter questions appear only when
+their backing shared versions are ready. Chat still returns the Phase 02
+placeholder until Phase 05 adds grounded generation.
+
+The worker reads the exact pinned S3 version. PDF.js extracts digital-text PDFs;
+encrypted, malformed, image-only, or over-50-page files fail with a readable
+reason. TXT decoding rejects invalid UTF-8 and binary control data. Immutable
+passages retain one-based PDF pages or half-open UTF-16 TXT offsets. Separate
+heading/clause-aware chunks use the cl100k tokenizer, a 350–500-token target,
+700-token cap, and anchored overlap for long clauses. Short clauses remain
+intact. Extractor, chunker, model and dimension metadata identify a generation.
+
+Durable jobs have leases and tokens. Persistence batches and publication run
+inside transactions conditioned on the current token and unexpired lease.
+Expired jobs can be reclaimed; stale workers cannot overwrite or publish the
+new owner's work. Provider calls have deadlines and bounded transient retries,
+respecting Retry-After. Failed versions retain pinned bytes for explicit retry.
+Embedding caches include content, model, dimensions, processing versions and
+the shared or private owner/conversation scope.
+
+A document version is marked ready only after queryable Atlas indexes and
+successful version/generation-filtered keyword and vector probes. Model/dimension changes build a new
+generation before switching its active pointer. Existing ready search remains
+available after a failed rebuild; historical passage identities are preserved.
+Reindexing a historical policy does not republish it over the current revision.
+
+One common text index and dimension-specific vector fields/indexes avoid an
+index per document or version. Atlas Free permits three Search/Vector indexes
+in total, allowing old/new vector indexes alongside the common text index for
+a dimension migration. Additional distinct dimensions require managing index
+retention from completed migrations or more cluster capacity. Creation
+acknowledgment alone is insufficient; builds and query visibility can take
+several minutes.
+
+## Phase 04 publication and API
+
+The admin shared-document panel shows processing state, readable failures,
+retry, replacement and archive controls. Replacements capture the server's
+current base revision and activate only after readiness with the same base and
+an unarchived document. Failure or a losing replacement race leaves the
+current policy available. Publication conflicts require a new replacement
+based on the current revision. Archive invalidates pending activation and
+retains historical originals and anchors.
+
+| Route | Phase 04 contract |
+| --- | --- |
+| `GET /admin/documents` | Admin version list with status, failures, revision, active pointer and archive metadata. |
+| `POST /admin/documents/:id/versions` | Stages a replacement using the initial upload reservation body; file bytes go directly to S3. |
+| `POST /admin/document-versions/:versionId/retry` | Requeues a failed shared version using its pinned original. |
+| `POST /conversations/:id/attachments/:versionId/retry` | Requeues a failed private version after owner/conversation checks. |
+| `DELETE /admin/documents/:id` | Archives the logical document and invalidates pending publication. |
+| `GET /admin/documents/:id/events` | Admin-only actor/action/document/version/timestamp records, with request ID when present. |
+| `GET /knowledge/starter-questions` | Authenticated questions backed by ready fixture versions. |
+
+Customers receive 403 for shared management. Admin status confers no general
+private-file access. Completion replay remains idempotent in indexing, ready
+and failed states and never repins a replacement latest S3 object.
+
+## Phase 04 QA
+
+Follow [the Phase 04 guide](qa/QA-04-indexing-and-policy-publication.md). With the
+isolated local replica set from Phase 02 running:
+
+```sh
+export QA_MONGODB_URI='mongodb://127.0.0.1:27028/?replicaSet=legalChatQA'
+npm ci
+npm run build
+npm run test:phase01
+npm run test:wave-02
+npm run test:wave-03
+npm run test:wave-04
+```
+
+The default Phase 04 suite uses controlled provider/storage adapters and real
+MongoDB transactions. Parser fixtures, source anchors, failures/retries,
+expired/stale leases, generation changes, replacement races and archive are
+tested. Adapter results do not establish hosted compatibility. The opt-in
+hosted gate is:
+
+```sh
+QA_INDEX_ENV_FILE=/private/tmp/legal-chat-phase04.qa.env npm run test:wave-04
+```
+
+Use only development/test Atlas, S3 and OpenRouter settings in that private file,
+with a unique S3 prefix. Optional `MONGODB_COLLECTION_PREFIX` is accepted only
+with `NODE_ENV=test` and must match `qa04_<8-to-40 lowercase letters/digits>_`.
+It applies to every application model and is omitted in normal environments.
+Native Atlas operations use the actual model collection name. Hosted cleanup
+must remove only exact owned collections/indexes and object versions, never
+the containing development database. Coordinate hosted runs because the
+cluster-wide index quota is shared.
+
+Parser fixtures and expected page excerpts, UTF-16 coordinates and hashes are
+under `scripts/fixtures/phase04/`. Fault injection belongs to test execution;
+hosted clients cannot select providers, advance clocks or issue worker writes.
+Record hosted branch queries, bootstrap counts/pointers from two runs and the
+admin browser walkthrough separately from adapter evidence. Keep credentials,
+cookies and signed forms out of evidence.
+
+References: [Mongoose 8 transactions](https://mongoosejs.com/docs/8.x/docs/transactions.html),
+[Mozilla PDF.js](https://github.com/mozilla/pdf.js),
+[OpenRouter embeddings](https://openrouter.ai/docs/api_reference/embeddings),
+and [Atlas index limits](https://www.mongodb.com/docs/atlas/atlas-search/limitations/).

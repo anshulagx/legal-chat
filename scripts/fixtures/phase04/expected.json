@@ -1,0 +1,38 @@
+{
+  "description": "Fictional parser and anchor fixtures for Phase 04 QA.",
+  "crossPage": {
+    "file": "cross-page.pdf",
+    "pageCount": 2,
+    "clauses": [
+      {
+        "page": 1,
+        "excerpt": "written notice. The notice must be received at least"
+      },
+      {
+        "page": 2,
+        "excerpt": "30 days before the requested termination date."
+      }
+    ]
+  },
+  "emoji": {
+    "file": "emoji.txt",
+    "excerpt": "The notice period is 30 days.",
+    "start": 80,
+    "end": 109,
+    "coordinateSystem": "half-open UTF-16 code units"
+  },
+  "expectedFailures": {
+    "encrypted.pdf": "encrypted or password-protected",
+    "image-only.pdf": "no usable text",
+    "fifty-one-pages.pdf": "over 50 pages",
+    "malformed.pdf": "malformed PDF"
+  },
+  "sha256": {
+    "cross-page.pdf": "a430141923f30ae08c395820a00469e1b12d02d5292cde7722f3f484820536ef",
+    "emoji.txt": "187f575ae408546e4b9090e791363b4942936a68357b03f00eeb1f8b1030e1b4",
+    "encrypted.pdf": "8318fbbe3f79b4ac8ca414acf07c1606560149337007b5548386c32709d15c69",
+    "fifty-one-pages.pdf": "b9f170372a0d9dd1f25ba78a3e9dd7d37502fc48a734ac45d2ca1f5f715d03aa",
+    "image-only.pdf": "bb7e125a013df658aebeb7dcac8894c86389b3fc084dea67d745a799b8d11978",
+    "malformed.pdf": "821a3fc646948687070480e48739e77771b67b8096786aae76526eb543da302b"
+  }
+}
