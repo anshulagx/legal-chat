@@ -7,6 +7,7 @@ import { requestGuard, requireSession } from './auth.ts';
 import type { Config } from './config.ts';
 import { Conversation, Message } from './conversations.ts';
 import { HttpError } from './http.ts';
+import { Document, DocumentVersion } from './uploads.ts';
 
 const objectId = /^[a-f0-9]{24}$/;
 const invalid = (message = 'Check the request fields.') => new HttpError(400, 'INVALID_INPUT', message);
@@ -24,14 +25,15 @@ function parseSend(body: unknown) {
   if (input.clientMessageId !== undefined && (typeof input.clientMessageId !== 'string'
     || !/^[A-Za-z0-9_-]{1,128}$/.test(input.clientMessageId))) throw invalid();
   if (input.selectedDocumentVersionIds !== undefined
-    && (!Array.isArray(input.selectedDocumentVersionIds) || input.selectedDocumentVersionIds.length)) {
-    throw invalid('Document selection is not available yet.');
-  }
+    && (!Array.isArray(input.selectedDocumentVersionIds) || input.selectedDocumentVersionIds.length > 5
+      || input.selectedDocumentVersionIds.some(id => typeof id !== 'string' || !objectId.test(id))
+      || new Set(input.selectedDocumentVersionIds).size !== input.selectedDocumentVersionIds.length)) throw invalid('Select up to five distinct documents.');
+  const selectedDocumentVersionIds = (input.selectedDocumentVersionIds ?? []) as string[];
   const message = input.message.trim();
   const conversationId = input.conversationId as string | undefined;
   const clientMessageId = input.clientMessageId as string | undefined ?? randomUUID();
-  const requestHash = createHash('sha256').update(JSON.stringify({ message, conversationId: conversationId ?? null, selectedDocumentVersionIds: [] })).digest('hex');
-  return { message, conversationId, clientMessageId, requestHash };
+  const requestHash = createHash('sha256').update(JSON.stringify({ message, conversationId: conversationId ?? null, selectedDocumentVersionIds })).digest('hex');
+  return { message, conversationId, clientMessageId, requestHash, selectedDocumentVersionIds };
 }
 
 async function reserve(ownerId: string, input: ReturnType<typeof parseSend>) {
@@ -61,7 +63,7 @@ async function reserve(ownerId: string, input: ReturnType<typeof parseSend>) {
       const [user] = await Message.create([{
         _id: userId, ownerId, conversationId: locked._id, sequence: locked.nextSequence,
         role: 'user', content: input.message, clientMessageId: input.clientMessageId,
-        requestHash: input.requestHash, attemptId, status: 'pending',
+        requestHash: input.requestHash, selectedDocumentVersionIds: input.selectedDocumentVersionIds, attemptId, status: 'pending',
       }, {
         _id: attemptId, ownerId, conversationId: locked._id, sequence: locked.nextSequence + 1,
         role: 'assistant', parentTurnId: userId, status: 'generating',
@@ -79,12 +81,27 @@ async function reserve(ownerId: string, input: ReturnType<typeof parseSend>) {
   }
 }
 
-async function finish(user: StoredMessage) {
+type Emit = (event: string, data: unknown) => void;
+async function finish(user: StoredMessage, config: Config, emit?: Emit) {
   let answer: Answer | undefined;
   try {
-    answer = await generateAnswer({ message: user.content, conversationId: String(user.conversationId), userMessageId: user.id, attemptId: String(user.attemptId) });
+    emit?.('progress', { stage: 'retrieval' });
+    answer = await generateAnswer({ message: user.content, ownerId: String(user.ownerId),
+      conversationId: String(user.conversationId), userMessageId: user.id, attemptId: String(user.attemptId),
+      selectedDocumentVersionIds: user.selectedDocumentVersionIds, config,
+      onProgress: stage => { emit?.('progress', { stage }); },
+      onSnapshot: async snapshot => {
+        await Message.updateOne({ _id: user.attemptId, status: 'generating' }, { $set: { evidenceSnapshot: snapshot } });
+      },
+      onParagraph: async paragraph => {
+        const saved = await Message.updateOne({ _id: user.attemptId, status: 'generating', 'paragraphs.sequence': { $ne: paragraph.sequence } }, {
+          $push: { paragraphs: paragraph, citations: { $each: paragraph.citations } },
+        });
+        if (saved.modifiedCount) emit?.('paragraph', paragraph);
+      },
+    });
   } catch {
-    // Keep the durable question and mark this attempt terminal on adapter failure.
+    // Preserve the durable question and any validated partial paragraphs.
   }
   await mongoose.connection.transaction(async session => {
     const locked = await Conversation.updateOne({ _id: user.conversationId, ownerId: user.ownerId, activeAttemptId: user.attemptId }, {
@@ -93,11 +110,13 @@ async function finish(user: StoredMessage) {
     if (!locked.modifiedCount) return;
     const status = answer ? 'completed' : 'failed';
     await Message.updateOne({ _id: user.attemptId, status: 'generating' }, {
-      $set: { status, content: answer?.response ?? '', followUps: answer?.followUps ?? [],
-        ...(!answer ? { failureCode: 'ANSWER_UNAVAILABLE' } : {}) },
+      $set: { status, ...(answer ? { content: answer.response, followUps: answer.followUps,
+        paragraphs: answer.paragraphs ?? [], citations: answer.citations ?? [], comparison: answer.comparison,
+        evidenceSnapshot: answer.evidenceSnapshot, handoffOffer: answer.handoffOffer, traceId: answer.traceId } : { failureCode: 'ANSWER_UNAVAILABLE' }) },
     }, { session });
     await Message.updateOne({ _id: user._id }, { $set: { status } }, { session });
   }, { writeConcern: { w: 'majority' } });
+  if (answer?.comparison) emit?.('comparison', answer.comparison);
 }
 
 async function sendResult(user: StoredMessage) {
@@ -106,7 +125,8 @@ async function sendResult(user: StoredMessage) {
   return {
     conversationId: String(user.conversationId), userMessageId: user.id, attemptId: attempt.id,
     clientMessageId: user.clientMessageId, status: attempt.status, response: attempt.content,
-    citations: attempt.citations, followUps: attempt.followUps, failureCode: attempt.failureCode,
+    citations: attempt.citations, paragraphs: attempt.paragraphs, comparison: attempt.comparison,
+    handoffOffer: attempt.handoffOffer, draft: attempt.draft, followUps: attempt.followUps, failureCode: attempt.failureCode,
   };
 }
 
@@ -119,7 +139,8 @@ function messageView(message: StoredMessage) {
     role: message.role, content: message.content, status: message.status,
     clientMessageId: message.clientMessageId, attemptId: message.role === 'assistant' ? message.id : String(message.attemptId),
     parentTurnId: message.parentTurnId ? String(message.parentTurnId) : undefined,
-    citations: message.citations, followUps: message.followUps, failureCode: message.failureCode,
+    citations: message.citations, paragraphs: message.paragraphs, comparison: message.comparison,
+    handoffOffer: message.handoffOffer, draft: message.draft, followUps: message.followUps, failureCode: message.failureCode,
     createdAt: message.createdAt.toISOString(),
   };
 }
@@ -202,12 +223,58 @@ export function chatRouter(config: Config, available: () => boolean) {
       ? encode({ id: last.id, date: last.createdAt.toISOString(), sequence: last.sequence }) : null });
   });
 
+  router.post('/chat/messages/:id/email-draft', async (req, res) => {
+    const id = String(req.params.id);
+    if (!objectId.test(id)) throw missing();
+    const message = await Message.findOne({ _id: id, ownerId: res.locals.account.id, role: 'assistant', status: 'completed' });
+    if (!message) throw missing();
+    if (!message.handoffOffer?.unresolvedQuestion) throw new HttpError(409, 'NO_HANDOFF_OFFER', 'This reply has no support draft offer.');
+    const followUps = ['Which parts are confirmed by the documents?', 'What should I ask support to clarify?'];
+    const confirmed = message.citations.slice(0, 6).map(citation => `${String(citation.filename ?? 'Source')}: ${String(citation.quote ?? '')}`).join('\n');
+    const draft = { subject: 'Clarification requested about my agreement',
+      body: `Hello Support,\n\nPlease clarify the following question, which the available documents do not fully answer:\n\n${String(message.handoffOffer.unresolvedQuestion)}${confirmed ? `\n\nAvailable source excerpts:\n${confirmed}` : ''}\n\nPlease identify the applicable clause and version in your reply.\n\nThank you.` };
+    const saved = await Message.findOneAndUpdate({ _id: id, ownerId: res.locals.account.id, draft: { $exists: false } },
+      { $set: { draft, followUps } }, { new: true }) ?? await Message.findById(id);
+    res.json({ draft: saved!.draft, followUps: saved!.followUps });
+  });
+
   router.post('/chat/send', async (req, res) => {
     const input = parseSend(req.body);
+    const existing = await Message.findOne({ ownerId: res.locals.account.id, role: 'user', clientMessageId: input.clientMessageId }).select('requestHash');
+    if (existing && existing.requestHash !== input.requestHash) throw conflictingKey();
+    // A selector is a scope restriction, never a grant of source access.
+    // Replays retain their original snapshot even after a source is replaced.
+    if (input.selectedDocumentVersionIds.length && !existing) {
+      const ownerId = res.locals.account.id as string;
+      const active = await Document.find({ scope: 'shared', archivedAt: null }).select('activeVersionId');
+      const allowed = await DocumentVersion.find({ _id: { $in: input.selectedDocumentVersionIds }, state: 'ready', activeIndexGeneration: { $type: 'string' },
+        $or: [{ scope: 'shared', _id: { $in: active.map(doc => doc.activeVersionId) } },
+          ...(input.conversationId ? [{ scope: 'private', ownerId, conversationId: input.conversationId }] : [])] }).select('_id');
+      if (allowed.length !== input.selectedDocumentVersionIds.length) throw invalid('Selected documents are unavailable in this chat.');
+    }
     const reserved = await reserve(res.locals.account.id, input);
-    if (reserved.created) await finish(reserved.user);
-    const result = await sendResult(reserved.user);
-    res.status(result.status === 'generating' ? 202 : 200).json(result);
+    if (!req.accepts(['text/event-stream', 'application/json']) || !req.get('Accept')?.includes('text/event-stream')) {
+      if (reserved.created) await finish(reserved.user, config);
+      const result = await sendResult(reserved.user);
+      return res.status(result.status === 'generating' ? 202 : 200).json(result);
+    }
+    res.status(200).set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+    res.flushHeaders();
+    const emit: Emit = (event, data) => { if (!res.destroyed && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+    emit('accepted', { conversationId: String(reserved.user.conversationId), userMessageId: reserved.user.id, attemptId: String(reserved.user.attemptId) });
+    const heartbeat = setInterval(() => { if (!res.destroyed) res.write(': heartbeat\n\n'); }, 10000).unref();
+    try {
+      if (reserved.created) await finish(reserved.user, config, emit);
+      const result = await sendResult(reserved.user);
+      if (!reserved.created) {
+        for (const paragraph of result.paragraphs ?? []) emit('paragraph', paragraph);
+        if (result.comparison) emit('comparison', result.comparison);
+      }
+      if (result.status === 'failed') emit('error', { code: result.failureCode, attemptId: result.attemptId, retryable: true });
+      else if (result.status === 'generating') emit('progress', { stage: 'generation' });
+      else emit('complete', result);
+    } finally { clearInterval(heartbeat); res.end(); }
   });
   return router;
 }

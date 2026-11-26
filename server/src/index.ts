@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { initializeAccounts } from './accounts.ts';
 import { authRouter } from './auth.ts';
 import { chatRouter } from './chat.ts';
+import { sourceRouter } from './sources.ts';
 import { initializeConversations } from './conversations.ts';
 import { cleanupUploads, initializeUploads, uploadRouter } from './uploads.ts';
 import { createStorage } from './storage.ts';
@@ -58,6 +59,7 @@ app.get('/health/ready', async (_req, res) => {
 });
 app.use('/auth', authRouter(config, available));
 app.use(chatRouter(config, available));
+app.use(sourceRouter(config, available, storage));
 app.use(uploadRouter(config, available, storage));
 app.get(['/', '/login', '/signup', '/app'], (_req, res) => {
   res.set('Cache-Control', 'no-store').sendFile(resolve(assets, 'index.html'));

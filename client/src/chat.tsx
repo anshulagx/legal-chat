@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { UploadPanel } from './uploads';
+import { UploadPanel, type Upload } from './uploads';
+import { readEventStream } from './sse';
+import { CitationLink, ComparisonSurface, SourceViewer, type Citation, type Paragraph, type Comparison, type EmailDraft } from './evidence';
 
 type Conversation = { id: string; title: string; updatedAt: string };
 type Message = {
   id: string; conversationId: string; role: 'user' | 'assistant'; content: string;
-  status: string; attemptId: string; sequence: number;
+  status: string; attemptId: string; sequence: number; paragraphs?: Paragraph[]; citations?: Citation[];
+  comparison?: Comparison; followUps?: string[]; handoffOffer?: { unresolvedQuestion: string }; draft?: EmailDraft;
 };
 type Page<T> = { items: T[]; nextCursor: string | null };
-type SendBody = { message: string; clientMessageId: string; conversationId?: string };
-type SendResult = { conversationId: string; userMessageId: string; attemptId: string; response: string; status: string };
+type SendBody = { message: string; clientMessageId: string; conversationId?: string; selectedDocumentVersionIds?: string[] };
+type SendResult = Omit<Message, 'id' | 'role' | 'content' | 'sequence'> & { userMessageId: string; response: string };
 
 export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionExpired: () => void; admin?: boolean }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -24,6 +27,12 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
   const [problem, setProblem] = useState('');
   const [retry, setRetry] = useState<SendBody>();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [stage, setStage] = useState('');
+  const [citation, setCitation] = useState<Citation>();
+  const [versions, setVersions] = useState<Upload[]>([]);
+  const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
+  const [draftBusy, setDraftBusy] = useState<string>();
+  const [copyStatus, setCopyStatus] = useState('');
   const [starters, setStarters] = useState<{ id: string; question: string }[]>([]);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const focusComposer = useRef(false);
@@ -93,6 +102,7 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
     if (activeSend.current || uploading) return;
     const version = ++viewVersion.current;
     setSelected(conversationId);
+    setSelectedVersions([]); setVersions([]);
     setMessages([]);
     setDraft('');
     setRetry(undefined);
@@ -114,6 +124,7 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
     if (activeSend.current) return;
     activeSend.current = true;
     setSending(true);
+    setStage('Saving your question…');
     setProblem('');
     setRetry(body);
     if (!retry) {
@@ -122,15 +133,46 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
       setDraft('');
     }
     try {
-      const result = await request<SendResult>('/chat/send', body);
+      let result: SendResult | undefined;
+      let attemptId = '';
+      const streamResponse = await fetch('/chat/send', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: lifetime.current.signal,
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(body) });
+      if (streamResponse.status === 401) { onSessionExpired(); throw new Error('Please log in again.'); }
+      if (!streamResponse.ok) { const failure = await streamResponse.json(); throw new Error(failure.message || 'Could not send your question.'); }
+      if (streamResponse.headers.get('content-type')?.includes('text/event-stream')) {
+        if (!streamResponse.body) throw new Error('The reply stream is unavailable.');
+        await readEventStream(streamResponse.body, event => {
+          const value = event.data as Record<string, unknown>;
+          if (event.event === 'accepted') {
+            attemptId = String(value.attemptId); const conversationId = String(value.conversationId);
+            setSelected(conversationId);
+            result = { conversationId, userMessageId: String(value.userMessageId), attemptId, status: 'generating', response: '' };
+            setMessages(previous => previous.some(item => item.id === attemptId) ? previous : [...previous, {
+              id: attemptId, attemptId, conversationId, role: 'assistant', content: '', status: 'generating', sequence: previous.length, paragraphs: [] }]);
+          } else if (event.event === 'progress') {
+            const labels: Record<string, string> = { retrieval: 'Finding relevant sources…', retrieving: 'Finding relevant sources…', generation: 'Preparing a grounded reply…', generating: 'Preparing a grounded reply…', comparing: 'Comparing both versions…', validation: 'Checking source references…', validating: 'Checking source references…' };
+            setStage(labels[String(value.stage)] ?? String(value.stage ?? 'Preparing your reply…'));
+          } else if (event.event === 'paragraph') {
+            const paragraph = (value.paragraph ?? value) as Paragraph;
+            setMessages(previous => previous.map(item => item.id === attemptId ? { ...item,
+              paragraphs: [...(item.paragraphs ?? []).filter(old => old.sequence !== paragraph.sequence), paragraph].sort((a, b) => a.sequence - b.sequence) } : item));
+          } else if (event.event === 'comparison') {
+            setMessages(previous => previous.map(item => item.id === attemptId ? { ...item, comparison: (value.comparison ?? value) as Comparison } : item));
+          } else if (event.event === 'complete') result = value as SendResult;
+          else if (event.event === 'error') throw new Error(String(value.message ?? 'The reply was interrupted. Your question and any displayed paragraphs are saved.'));
+        });
+        if (!result) throw new Error('The reply stream ended before completion. Retry to check the saved answer.');
+      } else result = await streamResponse.json() as SendResult;
+      if (!result) throw new Error('No reply was received.');
       if (lifetime.current.signal.aborted) return;
-      setSelected(result.conversationId);
+      const completed = result;
+      setSelected(completed.conversationId);
       const deadline = Date.now() + 60000;
-      let saved = await history(result.conversationId);
-      while (saved.find(item => item.id === result.attemptId)?.status === 'generating') {
+      let saved = await history(completed.conversationId);
+      while (saved.find(item => item.id === completed.attemptId)?.status === 'generating') {
         if (Date.now() >= deadline) throw new Error('The reply is still pending. Retry to check the saved result.');
         await new Promise(resolve => setTimeout(resolve, 500));
-        saved = await history(result.conversationId);
+        saved = await history(completed.conversationId);
       }
       if (lifetime.current.signal.aborted) return;
       setMessages(saved);
@@ -153,7 +195,26 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
       textarea.current?.focus();
       return;
     }
-    void send({ message: draft.trim(), clientMessageId: crypto.randomUUID(), ...(selected ? { conversationId: selected } : {}) });
+    ask(draft.trim());
+  }
+
+  function ask(message: string) {
+    if (sending || uploading || loading || retry) return;
+    void send({ message, clientMessageId: crypto.randomUUID(), ...(selected ? { conversationId: selected } : {}),
+      ...(selectedVersions.length ? { selectedDocumentVersionIds: selectedVersions } : {}) });
+  }
+  async function acceptDraft(message: Message) {
+    if (draftBusy) return;
+    setDraftBusy(message.id); setProblem('');
+    try {
+      const result = await request<{ draft: EmailDraft; followUps: string[] }>(`/chat/messages/${message.id}/email-draft`, {});
+      setMessages(previous => previous.map(item => item.id === message.id ? { ...item, ...result } : item));
+    } catch (error) { setProblem(error instanceof Error ? error.message : 'Could not prepare the draft.'); }
+    finally { setDraftBusy(undefined); }
+  }
+  async function copyDraft(value: EmailDraft) {
+    try { await navigator.clipboard.writeText(`Subject: ${value.subject}\n\n${value.body}`); setCopyStatus('Draft copied.'); }
+    catch { setCopyStatus('Copy was unavailable. Select the draft text below and copy it.'); }
   }
 
   const title = selected ? conversations.find(item => item.id === selected)?.title ?? 'Your chat' : 'How can we help?';
@@ -185,14 +246,27 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
       <div className="message-list" aria-label="Messages">
         {messages.map(message => <article className={`message message-${message.role}`} key={message.id}>
           <h2>{message.role === 'user' ? 'You' : 'Support'}</h2>
-          {message.content && <p>{message.content}</p>}
+          {message.paragraphs?.length ? message.paragraphs.map(paragraph => <div className="answer-paragraph" key={paragraph.sequence}>
+            <p>{paragraph.text}</p><div className="paragraph-citations">{paragraph.citations.map((item, index) => <CitationLink key={`${item.id}-${index}`} citation={item} open={setCitation} />)}</div>
+          </div>) : <>{message.content && <p>{message.content}</p>}{message.citations?.map((item, index) => <CitationLink key={`${item.id}-${index}`} citation={item} open={setCitation} />)}</>}
+          {message.comparison && <ComparisonSurface surface={message.comparison} open={setCitation} />}
+          {message.handoffOffer && !message.draft && <div className="handoff"><p>Unresolved question: {message.handoffOffer.unresolvedQuestion}</p>
+            <button type="button" className="secondary" disabled={Boolean(draftBusy)} onClick={() => void acceptDraft(message)}>{draftBusy === message.id ? 'Preparing draft…' : 'Draft an email to support'}</button></div>}
+          {message.draft && <section className="email-draft" aria-label="Support email draft"><h3>Email draft</h3><p><strong>Subject:</strong> {message.draft.subject}</p>
+            <textarea aria-label="Email draft text" readOnly rows={8} value={message.draft.body} /><button type="button" className="secondary" onClick={() => void copyDraft(message.draft!)}>Copy draft</button></section>}
+          {message.status === 'completed' && message.followUps?.length === 2 && <div className="follow-ups" aria-label="Suggested questions">{message.followUps.map(question =>
+            <button key={question} type="button" className="secondary" disabled={sending || uploading || loading || Boolean(retry)} onClick={() => ask(question)}>{question}</button>)}</div>}
           {message.status === 'generating' && <p role="status">Preparing a reply…</p>}
           {message.role === 'assistant' && message.status === 'failed' && <p className="error">The reply could not be completed. Your question is saved.</p>}
         </article>)}
       </div>
-      <p className="chat-status" role="status" aria-live="polite">{sending ? 'Saving your question and preparing a reply…' : ''}</p>
+      <p className="chat-status" role="status" aria-live="polite">{sending ? stage : copyStatus}</p>
       {problem && <div className="send-error"><p id="chat-error" className="error" role="alert">{problem}</p>
         {retry && <button type="button" className="secondary" disabled={sending} onClick={() => void send(retry)}>Retry sending</button>}</div>}
+      {versions.filter(item => item.status === 'ready').length >= 2 && <fieldset className="version-picker" disabled={sending || uploading || Boolean(retry)}><legend>Choose two versions to compare (optional)</legend>
+        {versions.filter(item => item.status === 'ready').map(item => <label key={item.versionId}><input type="checkbox" checked={selectedVersions.includes(item.versionId)}
+          disabled={!selectedVersions.includes(item.versionId) && selectedVersions.length === 2} onChange={event => setSelectedVersions(previous => event.target.checked ? [...previous, item.versionId] : previous.filter(id => id !== item.versionId))} /> {item.filename}</label>)}
+      </fieldset>}
       <form className="composer" onSubmit={submit} aria-busy={sending}>
         <label htmlFor="question">Your question</label>
         <textarea ref={textarea} id="question" name="question" value={draft} rows={3} maxLength={8000}
@@ -200,7 +274,7 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
           placeholder="Ask a support question…" onChange={event => setDraft(event.target.value)} />
         <button type="submit" className="primary" disabled={sending || uploading || loading || Boolean(retry)}>Send question</button>
       </form>
-      <UploadPanel conversationId={selected} onSessionExpired={onSessionExpired} onBusy={setUploading} disabled={sending || loading || Boolean(retry)}
+      <UploadPanel conversationId={selected} onSessionExpired={onSessionExpired} onVersions={setVersions} onBusy={setUploading} disabled={sending || loading || Boolean(retry)}
         ensureConversation={async () => {
           const conversation = await request<Conversation>('/conversations', {});
           setSelected(conversation.id);
@@ -210,5 +284,6 @@ export function ChatWorkspace({ onSessionExpired, admin = false }: { onSessionEx
         <UploadPanel shared onSessionExpired={onSessionExpired} />
       </details>}
     </main>
+    {citation && <SourceViewer citation={citation} close={() => setCitation(undefined)} onSessionExpired={onSessionExpired} />}
   </div>;
 }

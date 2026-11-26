@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
-type Upload = { uploadId: string; versionId: string; documentId: string; filename: string; size: number; status: string; indexingStatus?: string; revision?: number; isActive?: boolean; archivedAt?: string | null; failureReason?: string; form?: { url: string; fields: Record<string, string> } };
+export type Upload = { uploadId: string; versionId: string; documentId: string; filename: string; size: number; status: string; indexingStatus?: string; revision?: number; isActive?: boolean; archivedAt?: string | null; failureReason?: string; form?: { url: string; fields: Record<string, string> } };
 type Pending = { file: File; clientUploadId: string; conversationId?: string; targetDocumentId?: string; reservation?: Upload; reconcile: boolean };
 class ApiError extends Error { constructor(message: string, readonly code: string) { super(message); } }
 
-export function UploadPanel({ conversationId, ensureConversation, onChanged, onBusy, onSessionExpired, shared = false, disabled = false }: {
+export function UploadPanel({ conversationId, ensureConversation, onChanged, onBusy, onSessionExpired, shared = false, disabled = false, onVersions }: {
   conversationId?: string; ensureConversation?: () => Promise<string>; onChanged?: () => void;
-  onBusy?: (busy: boolean) => void; onSessionExpired: () => void; shared?: boolean; disabled?: boolean;
+  onBusy?: (busy: boolean) => void; onVersions?: (items: Upload[]) => void; onSessionExpired: () => void; shared?: boolean; disabled?: boolean;
 }) {
   const [items, setItems] = useState<Upload[]>([]);
   const [busy, setBusy] = useState(false);
@@ -34,10 +34,10 @@ export function UploadPanel({ conversationId, ensureConversation, onChanged, onB
   }
   async function load(id = conversationId) {
     const generation = ++listGeneration.current;
-    if (!shared && !id) { setItems([]); return; }
+    if (!shared && !id) { setItems([]); onVersions?.([]); return; }
     try {
       const response = await request<{ items: Upload[] }>(path(id));
-      if (!lifetime.current.signal.aborted && generation === listGeneration.current) setItems(response.items);
+      if (!lifetime.current.signal.aborted && generation === listGeneration.current) { setItems(response.items); onVersions?.(response.items); }
     } catch (error) {
       if (!lifetime.current.signal.aborted && generation === listGeneration.current) setProblem(error instanceof Error ? error.message : 'Could not load files.');
     }

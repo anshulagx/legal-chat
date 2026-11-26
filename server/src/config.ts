@@ -30,7 +30,17 @@ export function readConfig(env: NodeJS.ProcessEnv) {
     || !/^\d+$/.test(env.OPENROUTER_EMBEDDING_DIMENSIONS ?? '')
     || Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) < 1 || Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) > 8192)) throw new Error('Invalid or missing indexing configuration.');
 
+  const answerConfigured = !!env.OPENROUTER_API_KEY && !!env.OPENROUTER_CHAT_MODEL;
+  if (env.OPENROUTER_CHAT_MODEL && !/^[\w.-]+\/[\w.:-]+$/.test(env.OPENROUTER_CHAT_MODEL)) throw new Error('Invalid OPENROUTER_CHAT_MODEL.');
+  if (env.ANSWER_DEADLINE_MS && (!/^\d+$/.test(env.ANSWER_DEADLINE_MS) || Number(env.ANSWER_DEADLINE_MS) < 1000 || Number(env.ANSWER_DEADLINE_MS) > 180000)) throw new Error('Invalid ANSWER_DEADLINE_MS.');
+  const telemetryConfigured = !!env.LANGFUSE_BASE_URL && !!env.LANGFUSE_PUBLIC_KEY && !!env.LANGFUSE_SECRET_KEY;
+  if (telemetryConfigured && !/^https:\/\/(?:us\.|jp\.|hipaa\.)?cloud\.langfuse\.com\/?$/.test(env.LANGFUSE_BASE_URL!)) throw new Error('Invalid LANGFUSE_BASE_URL.');
   return {
+    queryEmbedding: env.OPENROUTER_API_KEY && /^[\w.-]+\/[\w.:-]+$/.test(env.OPENROUTER_EMBEDDING_MODEL ?? '')
+      && /^\d+$/.test(env.OPENROUTER_EMBEDDING_DIMENSIONS ?? '') && Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) >= 1 && Number(env.OPENROUTER_EMBEDDING_DIMENSIONS) <= 8192
+      ? { apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_EMBEDDING_MODEL!, dimensions: Number(env.OPENROUTER_EMBEDDING_DIMENSIONS), leaseMs: 120000, indexWaitMs: 180000 } : undefined,
+    answer: answerConfigured ? { apiKey: env.OPENROUTER_API_KEY!, model: env.OPENROUTER_CHAT_MODEL!, deadlineMs: Number(env.ANSWER_DEADLINE_MS ?? 90000) } : undefined,
+    telemetry: telemetryConfigured ? { baseUrl: env.LANGFUSE_BASE_URL!.replace(/\/$/, ''), publicKey: env.LANGFUSE_PUBLIC_KEY!, secretKey: env.LANGFUSE_SECRET_KEY!, environment: env.LANGFUSE_TRACING_ENVIRONMENT ?? (production ? 'production' : 'development') } : undefined,
     origin: values.APP_ORIGIN,
     port: Number(values.PORT),
     host: production ? '0.0.0.0' : new URL(values.APP_ORIGIN).hostname.replace(/^\[|\]$/g, ''),

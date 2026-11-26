@@ -1,0 +1,113 @@
+{
+  "environment": "isolated real Atlas and OpenRouter embeddings",
+  "embeddingModel": "openai/text-embedding-3-small",
+  "dimensions": 1536,
+  "fixtures": [
+    {
+      "id": "exact-id",
+      "keyword": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "vector": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "hybrid": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      }
+    },
+    {
+      "id": "paraphrase",
+      "keyword": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "vector": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "hybrid": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      }
+    },
+    {
+      "id": "exception",
+      "keyword": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "vector": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "hybrid": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      }
+    },
+    {
+      "id": "amendment",
+      "keyword": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "vector": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "hybrid": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      }
+    },
+    {
+      "id": "cross-page",
+      "keyword": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      },
+      "vector": {
+        "hitAtSix": true,
+        "firstRelevantRank": 2
+      },
+      "hybrid": {
+        "hitAtSix": true,
+        "firstRelevantRank": 1
+      }
+    }
+  ],
+  "metrics": {
+    "keyword": {
+      "hitRateAtSix": 1,
+      "meanFirstRelevantRank": 1
+    },
+    "vector": {
+      "hitRateAtSix": 1,
+      "meanFirstRelevantRank": 1.2
+    },
+    "hybrid": {
+      "hitRateAtSix": 1,
+      "meanFirstRelevantRank": 1
+    }
+  },
+  "candidateScope": {
+    "original": {
+      "keywordCount": 3,
+      "vectorCount": 9,
+      "scoped": true
+    },
+    "fresh": {
+      "keywordCount": 0,
+      "vectorCount": 0,
+      "scoped": true
+    },
+    "secondCustomer": {
+      "keywordCount": 0,
+      "vectorCount": 0,
+      "scoped": true
+    }
+  }
+}

@@ -26,6 +26,10 @@ const messageSchema = new Schema({
   status: { type: String, enum: ['pending', 'generating', 'completed', 'failed'], required: true },
   citations: { type: [Schema.Types.Mixed], default: [] },
   followUps: { type: [String], default: [] },
+  paragraphs: { type: [Schema.Types.Mixed], default: [] },
+  selectedDocumentVersionIds: { type: [String], default: [] },
+  evidenceSnapshot: Schema.Types.Mixed, comparison: Schema.Types.Mixed,
+  handoffOffer: Schema.Types.Mixed, draft: Schema.Types.Mixed, traceId: String,
   failureCode: String,
   createdAt: { type: Date, default: Date.now, required: true },
 });

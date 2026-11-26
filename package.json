@@ -16,7 +16,9 @@
     "test:wave-02": "node --test scripts/phase02.test.mjs",
     "test:wave-03": "node --test scripts/phase03.test.mjs",
     "test:wave-04": "node --test scripts/phase04.test.mjs",
-    "bootstrap": "node --env-file=.env scripts/bootstrap.mjs"
+    "bootstrap": "node --env-file=.env scripts/bootstrap.mjs",
+    "test:wave-05": "node --test scripts/phase05.test.mjs scripts/client-stream.test.mjs scripts/grounding.test.mjs",
+    "test:wave-06": "node --test scripts/phase06.test.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

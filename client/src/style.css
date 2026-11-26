@@ -66,3 +66,36 @@
   .admin-uploads { @apply mt-5; }
   .admin-uploads summary { @apply cursor-pointer py-3 font-semibold; }
 }
+
+.citation-anchor { display: inline-block; position: relative; max-width: 100%; margin: .3rem .4rem .3rem 0; }
+.citation-button { min-height: 2.75rem; padding: .4rem .6rem; border: 1px solid #a6bcb1; border-radius: .4rem; color: #215a51; font-size: .85rem; text-align: left; overflow-wrap: anywhere; }
+.citation-preview { position: absolute; z-index: 10; bottom: calc(100% + .3rem); left: 0; width: min(24rem, 72vw); max-height: 15rem; overflow: auto; padding: 1rem; border-radius: .5rem; background: #17352f; color: white; box-shadow: 0 3px 12px #0003; font-size: .85rem; }
+.answer-paragraph + .answer-paragraph { margin-top: 1rem; }
+.follow-ups { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
+.follow-ups button { text-align: left; }
+.comparison { margin-top: 1rem; }
+.comparison h3, .email-draft h3 { font-weight: 600; margin-bottom: .75rem; }
+.comparison-row { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #cdd9ce; margin-top: .8rem; border-radius: .5rem; overflow: hidden; }
+.comparison-term { grid-column: 1 / -1; padding: .8rem; background: #edf3ee; }
+.comparison-row h4 { font-weight: 600; margin-bottom: .4rem; }
+.comparison-side { min-width: 0; padding: .8rem; }
+.comparison-side + .comparison-side { border-left: 1px solid #cdd9ce; }
+.comparison-side blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .9rem; }
+.version-picker { display: grid; gap: .5rem; padding: 1rem; border: 1px solid #cdd9ce; margin-bottom: 1rem; border-radius: .6rem; }
+.version-picker label { min-height: 2.75rem; display: flex; gap: .65rem; align-items: center; overflow-wrap: anywhere; }
+.version-picker input { flex-shrink: 0; width: 1.2rem; height: 1.2rem; }
+.handoff, .email-draft { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #cdd9ce; }
+.handoff button { margin-top: .75rem; }
+.email-draft textarea { width: 100%; margin: .7rem 0; padding: .7rem; border: 1px solid #a6bcb1; border-radius: .4rem; }
+.source-dialog { margin: auto; width: min(56rem, calc(100% - 2rem)); max-height: 90vh; overflow: auto; border: 1px solid #a6bcb1; border-radius: .8rem; padding: 1.5rem; background: #fbfaf7; color: #202927; }
+.source-dialog::backdrop { background: #10251d99; }
+.source-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
+.source-heading h2 { font-size: 1.3rem; font-weight: 600; overflow-wrap: anywhere; }
+.source-dialog h3 { font-weight: 600; margin-top: 1rem; }
+.source-dialog blockquote { padding: 1rem; border-left: 3px solid #215a51; margin: 1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-dialog details { margin-top: 1rem; }
+.source-dialog summary { cursor: pointer; font-weight: 600; min-height: 2.75rem; }
+.source-dialog details p { margin-bottom: .8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-dialog mark { background: #fff0a6; color: #202927; }
+.source-page { font-weight: 600; }
+@media (max-width: 600px) { .comparison-row { grid-template-columns: 1fr; } .comparison-side + .comparison-side { border-left: 0; border-top: 1px solid #cdd9ce; } .source-heading { flex-wrap: wrap; } }

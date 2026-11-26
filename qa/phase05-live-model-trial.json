@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-11-26T08:37:34.710Z",
+  "model": "openai/gpt-4o-mini",
+  "fictionalOnly": true,
+  "trials": [
+    {
+      "name": "grounded-stream",
+      "status": "PASS",
+      "mode": "answer",
+      "paragraphs": 1,
+      "citations": 1,
+      "rows": 0,
+      "handoff": false,
+      "streamedParagraphs": 1,
+      "firstParagraphMs": 2986,
+      "durationMs": 3528
+    },
+    {
+      "name": "comparison-stream",
+      "status": "PASS",
+      "mode": "comparison",
+      "paragraphs": 3,
+      "citations": 3,
+      "rows": 2,
+      "handoff": false,
+      "streamedParagraphs": 3,
+      "firstParagraphMs": 2858,
+      "durationMs": 6455
+    },
+    {
+      "name": "mixed-evidence",
+      "status": "PASS",
+      "mode": "answer",
+      "paragraphs": 2,
+      "citations": 2,
+      "rows": 0,
+      "handoff": true,
+      "streamedParagraphs": 2,
+      "firstParagraphMs": 3520,
+      "durationMs": 4561
+    },
+    {
+      "name": "ambiguous-pair",
+      "status": "PASS",
+      "mode": "clarification",
+      "durationMs": 1335
+    }
+  ]
+}

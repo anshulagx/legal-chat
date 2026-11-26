@@ -1,6 +1,6 @@
 # Legal Support Chat
 
-## Run Phases 01–04
+## Run Phases 01–06
 
 Use Node 22.22.0 (see `.nvmrc`) and a development MongoDB replica set or Atlas database. Copy
 `.env.example` to `.env` if you do not already have it. For Phase 01 the
@@ -71,9 +71,9 @@ first send. Explicitly created empty drafts are omitted from the sidebar. The
 first question supplies the title. Account and admin sessions see only their
 own conversations.
 
-Phase 02 saves questions and returns a placeholder acknowledging receipt. It
-does not provide legal answers. Document retrieval, grounded answers, citations,
-suggestions and streaming arrive in Phase 05; uploads begin in Phase 03.
+Phase 02 introduced durable turns. Phases 05–06 now retrieve authorized evidence,
+stream validated paragraphs, open original sources, compare selected clauses,
+and offer copyable support drafts when evidence is incomplete.
 
 All chat routes require the same session cookie as `/auth/me`. Mutations also
 require `Origin` equal to `APP_ORIGIN`.
@@ -97,8 +97,8 @@ with `status: generating` and should be polled through history. Changing the
 message or original conversation argument with the same key returns 409
 `IDEMPOTENCY_CONFLICT`. A different message while the thread is busy returns
 409 `GENERATION_ACTIVE`. If a caller omits the optional key, the server allocates
-one but cannot deduplicate a retry that also omits it. Nonempty
-`selectedDocumentVersionIds` are rejected until document selection exists.
+one but cannot deduplicate a retry that also omits it. `selectedDocumentVersionIds` can restrict retrieval to ready versions in the
+owned thread or active shared knowledge. The ordered pair defines comparison sides.
 
 Thread creation, sequence allocation, user turn and assistant attempt are one
 MongoDB transaction. The answer adapter runs only after commit. Completion or
@@ -141,7 +141,7 @@ privacy, serialization, rollback and adapter failures.
 For browser checks, create an ignored `.env.qa.local` using a separate disposable
 database in this replica set, a fresh JWT secret and fictional seed credentials.
 Run `node --env-file=.env.qa.local server/dist/index.js`. The normal server uses
-the placeholder adapter. The deterministic test adapter and pause/failure
+the grounded provider when configured. The deterministic test adapter and pause/failure
 controls exist only in `scripts/phase02-fixture.mjs` and its IPC channel;
 `setTestAnswerAdapter` rejects injection outside `NODE_ENV=test`. No HTTP endpoint
 can select or control it. Keep QA credentials and cookie values out of evidence.
@@ -284,8 +284,8 @@ stable fixture IDs and content hashes. It pins originals, waits for indexing,
 and publishes the ready revision. Repeating bootstrap preserves identities and
 active pointers; changed fixture content requires a new revision. Files and the
 answer key are in `client/public/fixtures/`. Starter questions appear only when
-their backing shared versions are ready. Chat still returns the Phase 02
-placeholder until Phase 05 adds grounded generation.
+their backing shared versions are ready. Chat uses grounded generation when the
+chat and embedding providers are configured.
 
 The worker reads the exact pinned S3 version. PDF.js extracts digital-text PDFs;
 encrypted, malformed, image-only, or over-50-page files fail with a readable
@@ -386,3 +386,85 @@ References: [Mongoose 8 transactions](https://mongoosejs.com/docs/8.x/docs/trans
 [Mozilla PDF.js](https://github.com/mozilla/pdf.js),
 [OpenRouter embeddings](https://openrouter.ai/docs/api_reference/embeddings),
 and [Atlas index limits](https://www.mongodb.com/docs/atlas/atlas-search/limitations/).
+
+## Phases 05–06: grounded answers and comparison
+
+Configure `OPENROUTER_API_KEY`, `OPENROUTER_CHAT_MODEL`,
+`OPENROUTER_EMBEDDING_MODEL` and `OPENROUTER_EMBEDDING_DIMENSIONS` on the server.
+`openai/gpt-4o-mini` is the configured chat candidate; see the live trial evidence
+below for the measured compatibility result. Query embeddings use each indexed
+generation's recorded model and dimensions. `INDEXING_ENABLED=true` enables the
+upload worker; existing ready sources can be queried with the worker disabled.
+The optional `ANSWER_DEADLINE_MS` defaults to 90,000 (range 1,000–180,000).
+
+`POST /chat/send` accepts `selectedDocumentVersionIds`. These IDs must be ready
+private files in the owned conversation or active shared versions. A comparison
+uses two ordered IDs; when the pair is ambiguous the assistant asks for a
+selection. The composer lists ready attachments for explicit selection. Search
+uses the question's original terms and bounded recent context, concurrent Atlas
+text/vector branches, top 20 candidates per branch and reciprocal rank fusion
+with a six-chunk budget. Each comparison side is searched separately. A persisted
+attempt snapshot fixes the authorized versions and index generations.
+
+Both JSON and Fetch SSE use the same validator. SSE sends `accepted`, `progress`,
+validated `paragraph` events, an optional single complete `comparison`, and
+`complete`; failures send `error`. Heartbeat comments keep waiting streams alive.
+Paragraphs are persisted before emission. Factual paragraphs require passage IDs
+in that attempt's selected evidence. Exact quotations and locations come from
+stored passages. One correction is allowed; invalid anchors are withheld.
+Citation validation establishes source identity, so fixture QA also checks the
+meaning of each claim against the original.
+
+Citations open an authenticated dialog with readable source text, highlighted
+TXT passage and original PDF page links. `GET /sources/:versionId/passages/:passageId`
+and `GET /sources/:versionId/file` reauthorize every read, including admin reads.
+Original bytes are read from the pinned S3 version and hash-verified. Previously
+published shared versions retain Superseded/Archived labels. Unpublished staging
+versions cannot be read through customer source routes.
+
+The comparison catalog registers only `ClauseComparison`. The persisted payload
+pins A2UI `v0.8`, catalog `legal-support/1` and contains `surfaceUpdate` and
+`beginRendering` messages. The closed React renderer checks the catalog,
+component, row payload and both source references. Missing evidence is explicit
+on each side; rows stack beneath their term on mobile. The custom catalog ID
+identifies the local registration; it is not an external runtime dependency.
+Implementation references: [A2UI v0.8 message schema](https://raw.githubusercontent.com/a2ui-project/a2ui/main/specification/v0_8/json/server_to_client.json)
+and [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs).
+
+When a reply identifies an evidence gap, its handoff offer can be accepted with
+`POST /chat/messages/:assistantTurnId/email-draft`. The endpoint saves a subject
+and body containing the unresolved question and available source excerpts.
+Repeated acceptance returns the same draft. Copy it to send through your own
+email client. Every completed answer and draft has two immediate-submit follow-up
+questions; history restores citations, comparison rows, offers and drafts.
+
+Optional Langfuse Cloud settings export opaque attempt/turn/conversation IDs,
+retrieval ranks and stage timings with a bounded request timeout. Prompts,
+answers, filenames, quotations, signed URLs and credentials are excluded.
+The direct OTLP exporter uses ingestion version 4; the live verification reads
+Observations API v2 following the [current Langfuse API guidance](https://langfuse.com/docs/api-and-data-platform/features/public-api).
+
+### Phase 05–06 QA
+
+Use the disposable MongoDB replica set described above and Node 22:
+
+```sh
+npm run build
+npm run test:wave-05
+npm run test:wave-06
+```
+
+The suites use fictional sources, real MongoDB transactions and test-only
+storage/retrieval/model controls. HTTP clients cannot select these controls.
+`test:wave-05` also covers fragmented UTF-8/SSE frames and the A2UI renderer
+allowlist. Run bounded hosted model trials separately with:
+
+```sh
+node --env-file=.env scripts/phase05-live-trial.mjs
+```
+
+This makes seven small hosted chat requests with fictional material and writes
+sanitized results to `qa/phase05-live-model-trial.json`. Review the phase QA report
+for the separate live retrieval, browser and regression verdicts. Cancellation,
+restart reconciliation, explicit failed-attempt retry and generation throttling
+remain phase 07 scope.
