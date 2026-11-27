@@ -1,5 +1,33 @@
 # Legal Support Chat
 
+- **Hosted app:** <https://legal-chat-wuxo.onrender.com> (free Render instance; the first request after idle can take about a minute)
+- **Demo video:** _link added after recording_
+- **Repository:** <https://github.com/anshulagx/legal-chat>
+
+## Quick start with Docker Compose
+
+Requires Docker with Compose v2, a MongoDB Atlas cluster (Search and Vector
+Search indexes are Atlas features), a private versioned S3 bucket, an
+OpenRouter key and, optionally, Langfuse Cloud keys. Each setting is described
+in the sections below.
+
+```sh
+cp .env.example .env   # fill in the values; keep APP_ORIGIN=http://localhost:3000
+docker compose up --build
+```
+
+Compose builds one image and runs it twice. The `bootstrap` service creates
+indexes, seeds the fictional help guide and notice policy, waits until they are
+searchable, then exits. The `app` service starts only after bootstrap succeeds
+and serves http://localhost:3000. Compose sets `HOST=0.0.0.0` and
+`INDEXING_ENABLED=true`, so `.env` needs the storage and OpenRouter settings.
+Bootstrap is idempotent; the first run takes a few minutes while Atlas builds
+indexes, later runs finish in seconds. Check `docker compose ps` for a
+`healthy` app, or `curl localhost:3000/health/ready`.
+
+The S3 bucket CORS must allow `http://localhost:3000` (see Phase 03). Atlas
+Network Access must allow your current IP.
+
 ## Run Phases 01–06
 
 Use Node 22.22.0 (see `.nvmrc`) and a development MongoDB replica set or Atlas database. Copy
@@ -583,4 +611,55 @@ when the registry is reachable. Neither proves functional or accessibility
 acceptance. See [the QA report](qa/phase07.2-qa-report.md) for actual results,
 candidate identity and outstanding observations. The original
 [mockups](qa/phase07.2-mockups.html) remain design references, not implementation
-screenshots. Hosting, Compose and recording remain phase 08.
+screenshots.
+
+## Phase 08 · Container, deployment and models
+
+The multi-stage `Dockerfile` compiles the client and server with dev
+dependencies, then copies the build output, fictional fixtures, bootstrap
+script and production dependencies into a `node:22.22.0-bookworm-slim` image
+that runs as the `node` user. The image defaults to `NODE_ENV=production`
+and `PORT=3000` and checks `/health/ready`. No secrets are baked in; all
+configuration comes from the runtime environment.
+
+### Render
+
+`render.yaml` describes one Docker web service built from this Dockerfile
+with `/health/ready` as the health check. Render supplies `PORT` and
+`RENDER=true`, which enables the single trusted proxy hop. Set the
+`sync: false` values in the Render dashboard:
+
+- `APP_ORIGIN`: the service's public `https://` origin. Production rejects
+  non-HTTPS origins and cookies are `Secure`.
+- `MONGODB_DB_NAME` and `S3_KEY_PREFIX`: production-only values, distinct
+  from development. The S3 bucket CORS must list the Render origin.
+- `JWT_SECRET` and `ADMIN_SEED_PASSWORD`: new random values, not the
+  development ones.
+- `LANGFUSE_TRACING_ENVIRONMENT=production` keeps hosted traces apart.
+
+Bootstrap the production database once from a checkout, using a private
+production env file:
+
+```sh
+npm ci --include=dev && npm run build
+node --env-file=.env.production.local scripts/bootstrap.mjs
+```
+
+The free plan sleeps after inactivity. On wake, startup reconciles expired
+answer attempts and the index worker reclaims expired job leases, so queued
+uploads resume. Originals and citations are read from pinned S3 versions,
+never local disk. The rate-limit store is in memory: keep one instance, or
+move to a shared store before scaling.
+
+### Models and evaluation
+
+| Purpose | Model | Evidence |
+| --- | --- | --- |
+| Chat, planning and comparison | `openai/gpt-4o-mini` via OpenRouter | [Live trial](qa/phase05-live-model-trial.json): grounded stream, comparison, mixed evidence and ambiguous-pair clarification all passed; first paragraph in about 3 seconds. |
+| Embeddings | `openai/text-embedding-3-small`, 1,536 dimensions | [Preflight](qa/phase04-embedding-preflight.json) and [retrieval evaluation](qa/phase05-retrieval-evaluation.json). |
+
+On the five labeled retrieval fixtures (exact ID, paraphrase, exception,
+amendment and cross-page), keyword, vector and hybrid search each found the
+expected passage in the top six. Mean first relevant rank was 1.0 for keyword,
+1.2 for vector and 1.0 for hybrid. Candidates were empty for a fresh thread and
+a second customer, confirming ownership scoping before fusion.

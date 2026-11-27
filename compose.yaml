@@ -1,0 +1,24 @@
+services:
+  bootstrap:
+    build: .
+    image: legal-support-chat:local
+    env_file: .env
+    environment:
+      INDEXING_ENABLED: "true"
+    command: ["node", "scripts/bootstrap.mjs"]
+    restart: "no"
+
+  app:
+    build: .
+    image: legal-support-chat:local
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      INDEXING_ENABLED: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped

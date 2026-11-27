@@ -1,0 +1,65 @@
+services:
+  - type: web
+    name: legal-chat
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: INDEXING_ENABLED
+        value: "true"
+      - key: APP_ORIGIN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ISSUER
+        value: legal-support-chat
+      - key: JWT_AUDIENCE
+        value: legal-support-chat-browser
+      - key: JWT_TTL_SECONDS
+        value: "900"
+      - key: ADMIN_SEED_EMAIL
+        sync: false
+      - key: ADMIN_SEED_PASSWORD
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_KEY_PREFIX
+        sync: false
+      - key: UPLOAD_RESERVATION_LIMIT
+        value: "10"
+      - key: UPLOAD_RESERVATION_WINDOW_SECONDS
+        value: "600"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_CHAT_MODEL
+        value: openai/gpt-4o-mini
+      - key: OPENROUTER_EMBEDDING_MODEL
+        value: openai/text-embedding-3-small
+      - key: OPENROUTER_EMBEDDING_DIMENSIONS
+        value: "1536"
+      - key: LANGFUSE_BASE_URL
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_TRACING_ENVIRONMENT
+        value: production
+      - key: AUTH_LOGIN_LIMIT
+        value: "10"
+      - key: AUTH_LOGIN_WINDOW_SECONDS
+        value: "900"

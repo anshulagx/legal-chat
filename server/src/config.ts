@@ -35,6 +35,7 @@ export function readConfig(env: NodeJS.ProcessEnv) {
   if (env.ANSWER_DEADLINE_MS && (!/^\d+$/.test(env.ANSWER_DEADLINE_MS) || Number(env.ANSWER_DEADLINE_MS) < 1000 || Number(env.ANSWER_DEADLINE_MS) > 180000)) throw new Error('Invalid ANSWER_DEADLINE_MS.');
   const telemetryConfigured = !!env.LANGFUSE_BASE_URL && !!env.LANGFUSE_PUBLIC_KEY && !!env.LANGFUSE_SECRET_KEY;
   if (telemetryConfigured && !/^https:\/\/(?:us\.|jp\.|hipaa\.)?cloud\.langfuse\.com\/?$/.test(env.LANGFUSE_BASE_URL!)) throw new Error('Invalid LANGFUSE_BASE_URL.');
+  if (env.HOST && !['0.0.0.0', '::', '127.0.0.1', '::1', 'localhost'].includes(env.HOST)) throw new Error('Invalid HOST.');
   for (const key of ['CHAT_GENERATION_LIMIT', 'CHAT_GENERATION_WINDOW_SECONDS', 'CHAT_ATTEMPT_LEASE_MS']) {
     if (env[key] && (!/^\d+$/.test(env[key]!) || !Number.isSafeInteger(Number(env[key])) || Number(env[key]) < (key === 'CHAT_ATTEMPT_LEASE_MS' ? 1000 : 1) || Number(env[key]) > 2147483)) throw new Error(`Invalid ${key}.`);
   }
@@ -49,7 +50,7 @@ export function readConfig(env: NodeJS.ProcessEnv) {
     telemetry: telemetryConfigured ? { baseUrl: env.LANGFUSE_BASE_URL!.replace(/\/$/, ''), publicKey: env.LANGFUSE_PUBLIC_KEY!, secretKey: env.LANGFUSE_SECRET_KEY!, environment: env.LANGFUSE_TRACING_ENVIRONMENT ?? (production ? 'production' : 'development') } : undefined,
     origin: values.APP_ORIGIN,
     port: Number(values.PORT),
-    host: production ? '0.0.0.0' : new URL(values.APP_ORIGIN).hostname.replace(/^\[|\]$/g, ''),
+    host: env.HOST || (production ? '0.0.0.0' : new URL(values.APP_ORIGIN).hostname.replace(/^\[|\]$/g, '')),
     secureCookie: values.APP_ORIGIN.startsWith('https:'),
     trustedProxy: production && env.RENDER === 'true' ? 1 : false as const,
     mongoUri: values.MONGODB_URI,
