@@ -35,6 +35,14 @@ test('paragraph anchors are resolved from server evidence, with duplicate IDs co
   assert.equal(resolved.citations[0].page, 2);
 });
 
+test('passage IDs echoed into prose are removed while citations stay resolved', () => {
+  const id = '9d4acb9413704d5e3da2d9c3';
+  const resolved = validateParagraph({ ...paragraph, text: `Open Settings (${id}:p:2). Export stays available for 14 days (${id}:p:4, ${id}:p:15) after ${id}:p:9 termination.` }, passages, 0);
+  assert.equal(resolved.text, 'Open Settings. Export stays available for 14 days after termination.');
+  assert.equal(resolved.citations[0].passageId, 'p1');
+  assert.throws(() => validateParagraph({ ...paragraph, text: `[${id}:p:2]` }, passages, 0));
+});
+
 test('unknown, absent and unsupported paragraph anchors are rejected before persistence', () => {
   assert.throws(() => validateParagraph({ ...paragraph, passageIds: ['private-from-another-thread'] }, passages, 0));
   assert.throws(() => validateParagraph({ ...paragraph, passageIds: [] }, passages, 0));

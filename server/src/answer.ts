@@ -20,7 +20,7 @@ type AnswerAdapter = (request: AnswerRequest) => Promise<Answer>;
 export type Plan = { mode: 'answer' | 'comparison' | 'clarification'; selectedVersionIds: string[] };
 export interface GroundedProvider {
   plan(request: AnswerRequest, versions: SnapshotVersion[], signal: AbortSignal): Promise<Plan>;
-  generate(request: AnswerRequest, context: { passages: EvidencePassage[]; versions: SnapshotVersion[]; history: {role:string;content:string}[]; plan: Plan; correction?: string }, signal: AbortSignal,
+  generate(request: AnswerRequest, context: { passages: EvidencePassage[]; versions: SnapshotVersion[]; history: {role:string;content:string}[]; plan: Plan; correction?: string; shownParagraphs?: unknown[] }, signal: AbortSignal,
     onParagraph?: (raw: unknown, sequence: number) => Promise<void>): Promise<unknown>;
 }
 let adapter: AnswerAdapter | undefined;
@@ -37,9 +37,14 @@ const object = (value: unknown): Record<string, any> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid structured answer.');
   return value as Record<string, any>;
 };
+const passageReference = /\s*[([]\s*[a-f0-9]{24}:p:\d+(?:\s*[,;]\s*[a-f0-9]{24}:p:\d+)*\s*[)\]]|\b[a-f0-9]{24}:p:\d+\b/g;
+// Citations are rendered from passageIds; raw IDs echoed into prose are noise for the reader.
+export const withoutPassageReferences = (value: string) => value.replace(passageReference, '').replace(/[ \t]+([.,;:])/g, '$1').replace(/[ \t]{2,}/g, ' ').trim();
 const bounded = (value: unknown, max = 6000): string => {
-  if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error('Invalid answer text.');
-  return value.trim();
+  if (typeof value !== 'string' || value.length > max) throw new Error('Invalid answer text.');
+  const text = withoutPassageReferences(value);
+  if (!text) throw new Error('Invalid answer text.');
+  return text;
 };
 function citation(id: unknown, passages: EvidencePassage[]): Citation {
   const passage = passages.find(item => item.id === id);
@@ -146,6 +151,7 @@ export async function generateAnswer(request: AnswerRequest): Promise<Answer> {
     let validated: Answer | undefined;
     let correction: string | undefined;
     const emitted = new Map<number, string>();
+    const shownParagraphs: unknown[] = [];
     let blockedSequence: number | undefined;
     let validationMs = 0;
     const emit = async (raw: unknown, sequence: number) => {
@@ -158,10 +164,11 @@ export async function generateAnswer(request: AnswerRequest): Promise<Answer> {
       finally { validationMs += Date.now() - validationStarted; }
       if (emitted.has(sequence)) return;
       await request.onParagraph?.(paragraph); emitted.set(sequence, JSON.stringify(paragraph));
+      shownParagraphs.push({ text: paragraph.text, kind: object(raw).kind, passageIds: paragraph.citations.map(item => item.passageId) });
       timings.firstParagraphMs ??= Date.now() - started;
     };
     for (let trial = 0; trial < 2; trial++) {
-      const raw = await provider.generate(request, { ...context, versions, plan, correction }, signal, trial === 0 ? emit : undefined);
+      const raw = await provider.generate(request, { ...context, versions, plan, correction, shownParagraphs }, signal, trial === 0 ? emit : undefined);
       const validationStarted = Date.now();
       try { validated = validateGroundedOutput(raw, context.passages, versions, request.attemptId, plan); }
       catch (error) { correction = error instanceof Error ? error.message : 'Invalid citations.'; continue; }
