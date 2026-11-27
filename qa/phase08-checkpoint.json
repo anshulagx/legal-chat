@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-27",
+  "baselineHead": "4f5196b",
+  "testedCommit": "e3b48de00aec7bce146bdc4c054a4632609af2df",
+  "hostedDeployCommit": "08c2478",
+  "hostedRuntimeMatchesTested": "e3b48de differs from 08c2478 only in README.md, .dockerignore and docs/demo.mp4, all excluded from the image",
+  "candidateKind": "git archive of the tested commit extracted to /tmp/legal-chat-phase08-clean; node_modules symlinked to the workspace installation for build and tests; docker compose up --build from the same export",
+  "gate": "ACCEPTED WITH USER-APPROVED DEVIATIONS: Render builds from the Dockerfile (no shared image digest); shared database legal_chat_dev; scene 6 failure, throttling and restart on a local isolated container instead of a hosted demo origin; Langfuse trace shown through the public API instead of the dashboard. Hosted job resume after sleep not induced.",
+  "github": {
+    "remote": "https://github.com/anshulagx/legal-chat.git",
+    "branch": "main",
+    "link": "https://github.com/anshulagx/legal-chat/tree/main",
+    "verifiedRemoteSha": "e3b48de00aec7bce146bdc4c054a4632609af2df",
+    "matchesTestedCommit": true,
+    "verdict": "PASS"
+  },
+  "hosted": {
+    "origin": "https://legal-chat-wuxo.onrender.com",
+    "health": "ok after wake",
+    "signupCookie": "HttpOnly; Secure; SameSite=Lax",
+    "stream": { "status": 200, "contentType": "text/event-stream", "chunks": 7, "firstChunkMs": 1034, "events": ["accepted", "progress", "paragraph", "complete"] },
+    "isolation": { "ownHistory": 200, "otherHistory": 404, "otherAttachments": 404, "customerAdmin": 403 },
+    "logout": { "logout": 204, "afterLogout": 401 },
+    "gapAnswerRuns": { "completed": 4, "total": 4 }
+  },
+  "compose": {
+    "image": "sha256:7e1ab9e5eb5da70aace7960c145f5828d7129d440aa67f76afbbc0e7c8a6533c",
+    "bootstrap": "exited 0",
+    "app": "healthy",
+    "firstCitedAnswer": "PASS"
+  },
+  "cleanCheckout": {
+    "build": "PASS",
+    "typecheck": "PASS",
+    "regression": { "pass": 83, "fail": 0 },
+    "bundle": { "js": "268.23 kB (82.46 kB gzip)", "css": "34.93 kB (8.14 kB gzip)" }
+  },
+  "models": { "chat": "openai/gpt-4o-mini", "embeddings": "openai/text-embedding-3-small" },
+  "video": {
+    "path": "docs/demo.mp4",
+    "link": "https://github.com/anshulagx/legal-chat/blob/main/docs/demo.mp4",
+    "durationSeconds": 499.7,
+    "sceneStarts": { "1": "0:00", "2": "1:04", "3": "1:50", "4": "3:45", "5": "4:52", "6": "6:10" }
+  },
+  "node": "22.22.0",
+  "limits": [
+    "Hosted durable job resume across a sleep/wake cycle not induced; covered by phase 07 regression tests.",
+    "No Strict-Transport-Security header; not required by the TRD.",
+    "Shared database contains extra notice-policy revisions and admin test chats from recording takes.",
+    "Implemented, recorded and verified by the same agent; no independent reviewer."
+  ]
+}

@@ -143,6 +143,8 @@ Use an isolated test environment for replay, fault injection, worker pauses and 
 
 ## Phase 08 · Hosted release and recorded acceptance
 
+**Status: COMPLETE · 2026-11-27; phase gate ACCEPTED WITH USER-APPROVED DEVIATIONS.** Tested commit `e3b48de` passes build, typecheck, 83 regression tests and a clean `docker compose up --build`; the hosted service at <https://legal-chat-wuxo.onrender.com> passes the streaming, cookie, isolation and logout checks; the [narrated video](docs/demo.mp4) covers all six TRD scenes. The commit is verified on GitHub branch `main`, as recorded in the [QA report](qa/phase08-qa-report.md) and [checkpoint](qa/phase08-checkpoint.json). Anshul chose to build on Render from the Dockerfile instead of deploying one recorded digest, to keep the shared database, to record failure and throttling on a local isolated container instead of a hosted demo origin, and to show the Langfuse trace through its API rather than the dashboard. Hosted job resume after sleep was not induced.
+
 **Prerequisites.** Phase 07 and the inserted phase 7.2 must both pass. Use the integrated, redesigned and audited candidate for deployment and recording.
 
 **Product scope.** Assignment and release requirements · handoff. Acceptance and demo 1–6. [PRD](Legal_Support_Chat_PRD.md) · [TRD §§7–9](Legal_Support_Chat_TRD.md)

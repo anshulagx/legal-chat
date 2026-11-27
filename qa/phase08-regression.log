@@ -1,0 +1,515 @@
+TAP version 13
+# Subtest: SSE preserves fragmented UTF-8 and delimiters across every byte boundary
+ok 1 - SSE preserves fragmented UTF-8 and delimiters across every byte boundary
+  ---
+  duration_ms: 14.371875
+  type: 'test'
+  ...
+# Subtest: SSE handles multiline data, comments and CR delimiters
+ok 2 - SSE handles multiline data, comments and CR delimiters
+  ---
+  duration_ms: 2.242625
+  type: 'test'
+  ...
+# Subtest: SSE rejects malformed payloads and does not dispatch unfinished frames
+ok 3 - SSE rejects malformed payloads and does not dispatch unfinished frames
+  ---
+  duration_ms: 1.208833
+  type: 'test'
+  ...
+# Subtest: A2UI renderer accepts registered pinned ClauseComparison and explicit missing side
+ok 4 - A2UI renderer accepts registered pinned ClauseComparison and explicit missing side
+  ---
+  duration_ms: 0.997375
+  type: 'test'
+  ...
+# Subtest: A2UI renderer rejects unknown component, protocol, catalog, inconsistent rows and invalid anchors
+ok 5 - A2UI renderer rejects unknown component, protocol, catalog, inconsistent rows and invalid anchors
+  ---
+  duration_ms: 0.2105
+  type: 'test'
+  ...
+# Subtest: A2UI malformed surfaces fail closed without crashing the renderer
+ok 6 - A2UI malformed surfaces fail closed without crashing the renderer
+  ---
+  duration_ms: 0.397
+  type: 'test'
+  ...
+# Subtest: structured streaming scanner handles every byte boundary, quoted braces, escaped slashes, emoji and nested arrays
+ok 7 - structured streaming scanner handles every byte boundary, quoted braces, escaped slashes, emoji and nested arrays
+  ---
+  duration_ms: 9.112583
+  type: 'test'
+  ...
+# Subtest: paragraph anchors are resolved from server evidence, with duplicate IDs collapsed
+ok 8 - paragraph anchors are resolved from server evidence, with duplicate IDs collapsed
+  ---
+  duration_ms: 1.305
+  type: 'test'
+  ...
+# Subtest: passage IDs echoed into prose are removed while citations stay resolved
+ok 9 - passage IDs echoed into prose are removed while citations stay resolved
+  ---
+  duration_ms: 0.661916
+  type: 'test'
+  ...
+# Subtest: unknown, absent and unsupported paragraph anchors are rejected before persistence
+ok 10 - unknown, absent and unsupported paragraph anchors are rejected before persistence
+  ---
+  duration_ms: 0.320125
+  type: 'test'
+  ...
+# Subtest: comparison resolves selected left and right sources into actual pinned A2UI messages
+ok 11 - comparison resolves selected left and right sources into actual pinned A2UI messages
+  ---
+  duration_ms: 1.014
+  type: 'test'
+  ...
+# Subtest: comparison rejects swapped versions, cross-side anchors and unknown components
+ok 12 - comparison rejects swapped versions, cross-side anchors and unknown components
+  ---
+  duration_ms: 0.608917
+  type: 'test'
+  ...
+# Subtest: comparison missing side is explicit and cannot simultaneously claim a passage
+ok 13 - comparison missing side is explicit and cannot simultaneously claim a passage
+  ---
+  duration_ms: 1.235292
+  type: 'test'
+  ...
+# Subtest: ambiguous-pair clarification cannot carry factual paragraphs or a comparison
+ok 14 - ambiguous-pair clarification cannot carry factual paragraphs or a comparison
+  ---
+  duration_ms: 0.258125
+  type: 'test'
+  ...
+# Subtest: all answer modes restore exactly two contextual fallback suggestions
+ok 15 - all answer modes restore exactly two contextual fallback suggestions
+  ---
+  duration_ms: 0.659
+  type: 'test'
+  ...
+# Subtest: RRF fails closed if either branch contains unauthorized version or stale generation before fusion
+ok 16 - RRF fails closed if either branch contains unauthorized version or stale generation before fusion
+  ---
+  duration_ms: 0.853166
+  type: 'test'
+  ...
+# Subtest: telemetry exports only masked IDs, timings and model metadata with linked stage spans
+ok 17 - telemetry exports only masked IDs, timings and model metadata with linked stage spans
+  ---
+  duration_ms: 23.9705
+  type: 'test'
+  ...
+# Subtest: bounded correction keeps earlier streamed paragraphs stable and persists no invalid anchor
+ok 18 - bounded correction keeps earlier streamed paragraphs stable and persists no invalid anchor
+  ---
+  duration_ms: 3.753375
+  type: 'test'
+  ...
+# Subtest: query embedding request honors an already expired answer deadline
+ok 19 - query embedding request honors an already expired answer deadline
+  ---
+  duration_ms: 1.333125
+  type: 'test'
+  ...
+# Subtest: Phase 01 service checks
+    # Subtest: 01.1 liveness and readiness start healthy
+    ok 1 - 01.1 liveness and readiness start healthy
+      ---
+      duration_ms: 14.974458
+      type: 'test'
+      ...
+    # Subtest: 01.2 signup, login, reload session, logout and revocation
+    ok 2 - 01.2 signup, login, reload session, logout and revocation
+      ---
+      duration_ms: 1142.807458
+      type: 'test'
+      ...
+    # Subtest: 01.3 unique normalization, bcrypt, role, credentials and Origin
+    ok 3 - 01.3 unique normalization, bcrypt, role, credentials and Origin
+      ---
+      duration_ms: 2631.9345
+      type: 'test'
+      ...
+    # Subtest: 01.4 small IP limit includes Retry-After
+    ok 4 - 01.4 small IP limit includes Retry-After
+      ---
+      duration_ms: 4926.311917
+      type: 'test'
+      ...
+    # Subtest: 01.1 disconnect turns readiness unhealthy and preserves liveness
+    ok 5 - 01.1 disconnect turns readiness unhealthy and preserves liveness
+      ---
+      duration_ms: 113.747083
+      type: 'test'
+      ...
+    1..5
+ok 20 - Phase 01 service checks
+  ---
+  duration_ms: 11371.970583
+  type: 'test'
+  ...
+# Subtest: Phase 02 durable conversation integration
+    # Subtest: 02.2 concurrent first sends across processes reserve one thread, turn and generation
+    ok 1 - 02.2 concurrent first sends across processes reserve one thread, turn and generation
+      ---
+      duration_ms: 179.9635
+      type: 'test'
+      ...
+    # Subtest: 02.2 idempotency conflicts reject changed text and conversation without generating
+    ok 2 - 02.2 idempotency conflicts reject changed text and conversation without generating
+      ---
+      duration_ms: 17.193584
+      type: 'test'
+      ...
+    # Subtest: 02.1 restart and login preserve question, title, IDs and ordered history
+    ok 3 - 02.1 restart and login preserve question, title, IDs and ordered history
+      ---
+      duration_ms: 6559.933709
+      type: 'test'
+      ...
+    # Subtest: 02.3 keyset pages are distinct with timestamp ties; empty drafts stay hidden
+    ok 4 - 02.3 keyset pages are distinct with timestamp ties; empty drafts stay hidden
+      ---
+      duration_ms: 1601.356875
+      type: 'test'
+      ...
+    # Subtest: 02.3 accounts and admin cannot list, read or mutate another account thread
+    ok 5 - 02.3 accounts and admin cannot list, read or mutate another account thread
+      ---
+      duration_ms: 1432.62675
+      type: 'test'
+      ...
+    # Subtest: reservation rolls back thread, sequence, user and attempt on database rejection
+    ok 6 - reservation rolls back thread, sequence, user and attempt on database rejection
+      ---
+      duration_ms: 191.580584
+      type: 'test'
+      ...
+    # Subtest: different sends serialize generation per thread across server processes
+    ok 7 - different sends serialize generation per thread across server processes
+      ---
+      duration_ms: 472.965084
+      type: 'test'
+      ...
+    # Subtest: adapter failure preserves the user turn, terminal result and unlocks next send
+    ok 8 - adapter failure preserves the user turn, terminal result and unlocks next send
+      ---
+      duration_ms: 352.297542
+      type: 'test'
+      ...
+    # Subtest: protected chat routes enforce session revocation, input bounds and Origin
+    ok 9 - protected chat routes enforce session revocation, input bounds and Origin
+      ---
+      duration_ms: 50.369042
+      type: 'test'
+      ...
+    1..9
+ok 21 - Phase 02 durable conversation integration
+  ---
+  duration_ms: 16216.087708
+  type: 'test'
+  ...
+# Subtest: Phase 03 immutable direct uploads (isolated storage emulator)
+    # Subtest: 03.1 direct upload pins a private original and returns queued attachment
+    ok 1 - 03.1 direct upload pins a private original and returns queued attachment
+      ---
+      duration_ms: 88.306292
+      type: 'test'
+      ...
+    # Subtest: 03.2 duplicate completion and repeated reservation create one pinned version and queued job
+    ok 2 - 03.2 duplicate completion and repeated reservation create one pinned version and queued job
+      ---
+      duration_ms: 107.289667
+      type: 'test'
+      ...
+    # Subtest: 03.2 signed form replay changes latest bytes while worker input remains first pinned checksum
+    ok 3 - 03.2 signed form replay changes latest bytes while worker input remains first pinned checksum
+      ---
+      duration_ms: 32.351875
+      type: 'test'
+      ...
+    # Subtest: 03.3 oversized uploads, unsupported MIME and out-of-policy signed posts are rejected
+    ok 4 - 03.3 oversized uploads, unsupported MIME and out-of-policy signed posts are rejected
+      ---
+      duration_ms: 85.529917
+      type: 'test'
+      ...
+    # Subtest: 03.3 six concurrent reservations enforce five slots and same-key retry at last slot
+    ok 5 - 03.3 six concurrent reservations enforce five slots and same-key retry at last slot
+      ---
+      duration_ms: 197.348083
+      type: 'test'
+      ...
+    # Subtest: 03.4 ownership, customer admin denial and idempotency conflicts
+    ok 6 - 03.4 ownership, customer admin denial and idempotency conflicts
+      ---
+      duration_ms: 75.047625
+      type: 'test'
+      ...
+    # Subtest: 03.3 reservation expiry and slot recovery preserve pinned originals and reconcile arrived bytes
+    ok 7 - 03.3 reservation expiry and slot recovery preserve pinned originals and reconcile arrived bytes
+      ---
+      duration_ms: 316.816583
+      type: 'test'
+      ...
+    # Subtest: 03.4 configurable per-user reservation limit returns Retry-After
+    ok 8 - 03.4 configurable per-user reservation limit returns Retry-After
+      ---
+      duration_ms: 3102.764584
+      type: 'test'
+      ...
+    1..8
+ok 22 - Phase 03 immutable direct uploads (isolated storage emulator)
+  ---
+  duration_ms: 7758.560417
+  type: 'test'
+  ...
+# Subtest: Phase 04 indexing and publication (isolated MongoDB and deterministic providers)
+    # Subtest: 04.1 cross-page PDF and exact UTF-16 emoji anchors, literal tokens and bounded overlap
+    ok 1 - 04.1 cross-page PDF and exact UTF-16 emoji anchors, literal tokens and bounded overlap
+      ---
+      duration_ms: 1324.453792
+      type: 'test'
+      ...
+    # Subtest: filtered search readiness rejects even successful query results after the overall probe deadline
+    ok 2 - filtered search readiness rejects even successful query results after the overall probe deadline
+      ---
+      duration_ms: 42.417458
+      type: 'test'
+      ...
+    # Subtest: search index metadata visibility cannot return success after its readiness window
+    ok 3 - search index metadata visibility cannot return success after its readiness window
+      ---
+      duration_ms: 75.525041
+      type: 'test'
+      ...
+    # Subtest: 04.2 malformed files, encrypted, image-only, 51-page PDFs and invalid UTF-8 fail actionably
+    ok 4 - 04.2 malformed files, encrypted, image-only, 51-page PDFs and invalid UTF-8 fail actionably
+      ---
+      duration_ms: 800.536542
+      type: 'test'
+      ...
+    # Subtest: bounded passage batches preserve more than 32 immutable passages through the full pipeline
+    ok 5 - bounded passage batches preserve more than 32 immutable passages through the full pipeline
+      ---
+      duration_ms: 279.201708
+      type: 'test'
+      ...
+    # Subtest: 04.2 transient embedding failure honors retry deadline and same pinned version recovers without duplicate passages
+    ok 6 - 04.2 transient embedding failure honors retry deadline and same pinned version recovers without duplicate passages
+      ---
+      duration_ms: 478.378375
+      type: 'test'
+      ...
+    # Subtest: 04.3 expired and stale worker leases survive process death and fence late writes
+    ok 7 - 04.3 expired and stale worker leases survive process death and fence late writes
+      ---
+      duration_ms: 1764.993708
+      type: 'test'
+      ...
+    # Subtest: 04.4 failed replacement retains V1 and replacement races activate only one eligible winner
+    ok 8 - 04.4 failed replacement retains V1 and replacement races activate only one eligible winner
+      ---
+      duration_ms: 401.654583
+      type: 'test'
+      ...
+    # Subtest: 04.4 archive during indexing prevents publication and stale worker output
+    ok 9 - 04.4 archive during indexing prevents publication and stale worker output
+      ---
+      duration_ms: 150.942125
+      type: 'test'
+      ...
+    # Subtest: model/dimension migration retains ready availability, immutable anchors and reclaims expired old generation
+    ok 10 - model/dimension migration retains ready availability, immutable anchors and reclaims expired old generation
+      ---
+      duration_ms: 719.189875
+      type: 'test'
+      ...
+    # Subtest: 04.1 bootstrap twice is idempotent, and historical V1 migration never republishes over V2
+    ok 11 - 04.1 bootstrap twice is idempotent, and historical V1 migration never republishes over V2
+      ---
+      duration_ms: 3064.997791
+      type: 'test'
+      ...
+    1..11
+ok 23 - Phase 04 indexing and publication (isolated MongoDB and deterministic providers)
+  ---
+  duration_ms: 12254.715125
+  type: 'test'
+  ...
+# Subtest: Phase 05 grounded answers, streaming and source isolation
+    # Subtest: 05.1 accepted/progress/paragraph/complete arrive in order; paragraph is durable before completion
+    ok 1 - 05.1 accepted/progress/paragraph/complete arrive in order; paragraph is durable before completion
+      ---
+      duration_ms: 299.402708
+      type: 'test'
+      ...
+    # Subtest: 05.2 citations resolve exact immutable TXT range and superseded/archived shared originals
+    ok 2 - 05.2 citations resolve exact immutable TXT range and superseded/archived shared originals
+      ---
+      duration_ms: 249.241917
+      type: 'test'
+      ...
+    # Subtest: 05.2 PDF citation opens the exact page and preserves original PDF bytes
+    ok 3 - 05.2 PDF citation opens the exact page and preserves original PDF bytes
+      ---
+      duration_ms: 39.598667
+      type: 'test'
+      ...
+    # Subtest: 05.4 second customer cannot read private history, passage or original file
+    ok 4 - 05.4 second customer cannot read private history, passage or original file
+      ---
+      duration_ms: 13.650375
+      type: 'test'
+      ...
+    # Subtest: 05.4 seeded admin cannot read private history, passage or original file
+    ok 5 - 05.4 seeded admin cannot read private history, passage or original file
+      ---
+      duration_ms: 13.313042
+      type: 'test'
+      ...
+    # Subtest: 05.4 explicit selected IDs cannot grant private evidence in another or fresh thread
+    ok 6 - 05.4 explicit selected IDs cannot grant private evidence in another or fresh thread
+      ---
+      duration_ms: 28.710667
+      type: 'test'
+      ...
+    # Subtest: 05.4 history restores cited paragraphs and two suggestions; JSON and SSE have the same fields
+    ok 7 - 05.4 history restores cited paragraphs and two suggestions; JSON and SSE have the same fields
+      ---
+      duration_ms: 170.379041
+      type: 'test'
+      ...
+    # Subtest: 05.3 invalid citation is withheld and never saved as supported output
+    ok 8 - 05.3 invalid citation is withheld and never saved as supported output
+      ---
+      duration_ms: 69.83025
+      type: 'test'
+      ...
+    # Subtest: 05.3/05.4 keyword and vector candidate scopes exclude private source before fusion
+    ok 9 - 05.3/05.4 keyword and vector candidate scopes exclude private source before fusion
+      ---
+      duration_ms: 1228.29675
+      type: 'test'
+      ...
+    1..9
+ok 24 - Phase 05 grounded answers, streaming and source isolation
+  ---
+  duration_ms: 9127.480958
+  type: 'test'
+  ...
+# Subtest: Phase 06 comparisons and explicit support handoff
+    # Subtest: 06.1 one complete pinned A2UI comparison verifies both sides and explicit missing evidence
+    ok 1 - 06.1 one complete pinned A2UI comparison verifies both sides and explicit missing evidence
+      ---
+      duration_ms: 132.383042
+      type: 'test'
+      ...
+    # Subtest: 06.2 ambiguous three-file comparison asks for a pair; selected IDs constrain separate branches and restore on history
+    ok 2 - 06.2 ambiguous three-file comparison asks for a pair; selected IDs constrain separate branches and restore on history
+      ---
+      duration_ms: 502.9575
+      type: 'test'
+      ...
+    # Subtest: 06.3 supported paragraph and named gap offer draft; accepting twice returns one persisted copyable draft
+    ok 3 - 06.3 supported paragraph and named gap offer draft; accepting twice returns one persisted copyable draft
+      ---
+      duration_ms: 208.697083
+      type: 'test'
+      ...
+    1..3
+ok 25 - Phase 06 comparisons and explicit support handoff
+  ---
+  duration_ms: 5594.870083
+  type: 'test'
+  ...
+# Subtest: 07.3 telemetry masks content, correlates retries, ranks branches and allowlists usage
+ok 26 - 07.3 telemetry masks content, correlates retries, ranks branches and allowlists usage
+  ---
+  duration_ms: 82.996625
+  type: 'test'
+  ...
+# Subtest: 07.3 telemetry failure is isolated and flush time is bounded
+ok 27 - 07.3 telemetry failure is isolated and flush time is bounded
+  ---
+  duration_ms: 41.099583
+  type: 'test'
+  ...
+# Subtest: 7.2 terminal lookup failures preserve HTTP or SSE error semantics and saved replies
+ok 28 - 7.2 terminal lookup failures preserve HTTP or SSE error semantics and saved replies
+  ---
+  duration_ms: 3592.593208
+  type: 'test'
+  ...
+# Subtest: Phase 07 recovery integration
+    # Subtest: 07.1 pre-header failure returns retryable 503 with durable IDs
+    ok 1 - 07.1 pre-header failure returns retryable 503 with durable IDs
+      ---
+      duration_ms: 36.237875
+      type: 'test'
+      ...
+    # Subtest: 07.1 interrupted streams preserve partial paragraphs and question
+    ok 2 - 07.1 interrupted streams preserve partial paragraphs and question
+      ---
+      duration_ms: 81.628916
+      type: 'test'
+      ...
+    # Subtest: 07.1 after-paragraph failure emits terminal SSE error
+    ok 3 - 07.1 after-paragraph failure emits terminal SSE error
+      ---
+      duration_ms: 37.1825
+      type: 'test'
+      ...
+    # Subtest: 07.2 concurrent retries create one fresh attempt and preserve selections
+    ok 4 - 07.2 concurrent retries create one fresh attempt and preserve selections
+      ---
+      duration_ms: 313.629292
+      type: 'test'
+      ...
+    # Subtest: 07.2 stale attempts after restart are interrupted and release the thread
+    ok 5 - 07.2 stale attempts after restart are interrupted and release the thread
+      ---
+      duration_ms: 2795.942209
+      type: 'test'
+      ...
+    # Subtest: 07.2 explicit cancellation is owned, durable and unlocks generation
+    ok 6 - 07.2 explicit cancellation is owned, durable and unlocks generation
+      ---
+      duration_ms: 146.357625
+      type: 'test'
+      ...
+    # Subtest: 07.3 provider Retry-After survives reload and blocks premature retry
+    ok 7 - 07.3 provider Retry-After survives reload and blocks premature retry
+      ---
+      duration_ms: 1497.131416
+      type: 'test'
+      ...
+    1..7
+ok 29 - Phase 07 recovery integration
+  ---
+  duration_ms: 8235.1535
+  type: 'test'
+  ...
+# Subtest: 07.3 generation quotas are per-user and replays do not spend another slot
+ok 30 - 07.3 generation quotas are per-user and replays do not spend another slot
+  ---
+  duration_ms: 3817.593625
+  type: 'test'
+  ...
+# Subtest: 07.2 retry snapshots current evidence while retaining the failed snapshot
+ok 31 - 07.2 retry snapshots current evidence while retaining the failed snapshot
+  ---
+  duration_ms: 2816.263792
+  type: 'test'
+  ...
+1..31
+# tests 83
+# suites 0
+# pass 83
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 37261.918625
