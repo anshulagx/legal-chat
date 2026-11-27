@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 import { ChatWorkspace } from './chat';
+import { ChevronIcon, FileIcon, LogOutIcon, ScaleIcon, ShieldIcon, SparkIcon } from './icons';
 
 type Profile = { id: string; email: string; role: 'customer' | 'admin' };
 type Problem = { message: string; fields?: Record<string, string>; retryAfterSeconds?: number };
@@ -11,7 +12,7 @@ const sessionOptions = { credentials: 'same-origin', cache: 'no-store' } as cons
 const networkError = 'The service is temporarily unavailable. Please try again.';
 
 function Brand() {
-  return <span className="brand"><span aria-hidden="true" className="brand-mark">LS</span>Legal Support Chat</span>;
+  return <span className="brand"><span aria-hidden="true" className="brand-mark"><ScaleIcon size={18} /></span>Legal Support Chat</span>;
 }
 
 function AuthForm({ signup, onNavigate, onAuthenticated }: {
@@ -69,11 +70,20 @@ function AuthForm({ signup, onNavigate, onAuthenticated }: {
     <main className="auth-layout">
       <aside className="cover">
         <Brand />
-        <p>Support for your legal workspace.</p>
+        <div className="cover-copy">
+          <p className="cover-title">Clear answers.<br />Evidence you can check.</p>
+          <ul className="cover-features">
+            <li><span aria-hidden="true"><SparkIcon /></span>Grounded answers drawn from your agreements and policies</li>
+            <li><span aria-hidden="true"><FileIcon /></span>Every claim links to the exact cited passage</li>
+            <li><span aria-hidden="true"><ShieldIcon /></span>Private files stay scoped to a single chat</li>
+          </ul>
+        </div>
+        <p className="cover-footnote">Legal Support Chat · Secure workspace</p>
       </aside>
       <section className="auth-panel" aria-labelledby="auth-title">
-        <form noValidate onSubmit={submit} className="auth-form" aria-busy={busy}>
+        <form noValidate onSubmit={submit} className="auth-form auth-card" aria-busy={busy}>
           <h1 id="auth-title">{signup ? 'Create your account' : 'Log in'}</h1>
+          <p className="auth-intro">Ask a question and keep your documents in one place.</p>
           <div className="field">
             <label htmlFor="email">Email address</label>
             <input ref={email} id="email" name="email" type="email" autoComplete="email" required
@@ -114,7 +124,7 @@ function App() {
   const [failure, setFailure] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const viewHeading = useRef<HTMLHeadingElement>(null);
+  const viewHeading = useRef<HTMLElement>(null);
 
   function navigate(next: string, replace = false) {
     if (location.pathname !== next) {
@@ -203,7 +213,7 @@ function App() {
       {failure ? <>
         <p className="error" role="alert">{failure}</p>
         <button className="primary" onClick={() => setRefresh(value => value + 1)}>Try again</button>
-      </> : <p role="status">Checking your session…</p>}
+      </> : <p role="status" className="loading-line"><span aria-hidden="true" className="spinner" />Checking your session…</p>}
     </main>;
   }
   if (!profile) {
@@ -212,17 +222,22 @@ function App() {
   }
   return (
     <div className="workspace">
-      <header className="workspace-bar">
+      <header className="workspace-bar" ref={viewHeading} tabIndex={-1} aria-label={profile.role === 'admin' ? 'Admin workspace' : 'Support workspace'}>
         <Brand />
-        <button type="button" className="secondary" aria-disabled={loggingOut} onClick={logout}>
-          {loggingOut ? 'Logging out…' : 'Log out'}
+        <span className="workspace-badge">{profile.role === 'admin' ? 'Admin' : 'Support'}</span>
+        <details className="account-menu">
+          <summary><span aria-hidden="true" className="avatar">{profile.email.slice(0, 1).toUpperCase()}</span>
+            <span className="account-label">Account</span><ChevronIcon size={14} /></summary>
+          <div>
+            <h2>{profile.role === 'admin' ? 'Admin workspace' : 'Support workspace'}</h2>
+            <p className="account">Signed in as {profile.email}</p>
+          </div>
+        </details>
+        <button type="button" className="ghost logout" aria-disabled={loggingOut} onClick={logout}>
+          <LogOutIcon /><span>{loggingOut ? 'Logging out…' : 'Log out'}</span>
         </button>
       </header>
-      <div className="workspace-account">
-        <h2 tabIndex={-1} ref={viewHeading}>{profile.role === 'admin' ? 'Admin workspace' : 'Support workspace'}</h2>
-        <p className="account">Signed in as {profile.email}</p>
-        {failure && <p className="error" role="alert">{failure}</p>}
-      </div>
+      {failure && <p className="workspace-error error" role="alert">{failure}</p>}
       <ChatWorkspace key={profile.id} admin={profile.role === 'admin'} onSessionExpired={() => { setProfile(null); navigate('/login', true); }} />
     </div>
   );

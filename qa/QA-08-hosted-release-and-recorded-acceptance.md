@@ -6,7 +6,7 @@
 
 ## Set up the review
 
-Use a clean checkout of the locally committed candidate SHA. Record the SHA with the evidence. Confirm phase 07 passed. Use the handoff’s documented startup command and fixture paths. Use isolated fictional records and distinct browser profiles for customers A and B and the seeded admin as needed. For shell examples, set BASE to the origin without a trailing slash. Set any referenced cookie variable to the path of a private authenticated curl cookie jar and replace record variables with IDs observed during your run. Keep cookie values, credentials and signed URLs out of evidence.
+Use a clean checkout of the locally committed candidate SHA. Record the SHA with the evidence. Confirm phase 07 and [phase 7.2](QA-07.2-design-and-code-quality.md) passed. Use the integrated redesigned and audited candidate. Use the handoff’s documented startup command and fixture paths. Use isolated fictional records and distinct browser profiles for customers A and B and the seeded admin as needed. For shell examples, set BASE to the origin without a trailing slash. Set any referenced cookie variable to the path of a private authenticated curl cookie jar and replace record variables with IDs observed during your run. Keep cookie values, credentials and signed URLs out of evidence.
 
 ## Required checks
 

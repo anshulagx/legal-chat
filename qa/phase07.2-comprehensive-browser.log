@@ -1,0 +1,22 @@
+
+> legal-support-chat@0.0.0 qa:phase07.2
+> node scripts/phase07.2-browser.mjs
+
+{"check":"Signup and login reflow, axe and keyboard order","verdict":"PASS"}
+{"check":"Fresh chat reflow and persistent composer","verdict":"PASS"}
+{"check":"Grounded answer and exact source with Escape focus return","verdict":"PASS"}
+{"check":"Closing a delayed source prevents stale dialog resurrection","verdict":"PASS"}
+{"check":"Absent evidence opt-in support draft and clipboard","verdict":"PASS"}
+{"check":"Reopened comparison identities, missing side and scope at all widths","verdict":"PASS"}
+{"check":"File readiness, explicit document order and swap","verdict":"PASS"}
+{"check":"Mobile history native modal Escape and focus return","verdict":"PASS"}
+{"check":"Emulated small keyboard viewport keeps question controls reachable","verdict":"PASS"}
+{"check":"Customer isolation and admin denial","verdict":"PASS"}
+{"check":"Dedicated admin destination and reflow","verdict":"PASS"}
+{"check":"Policy replacement and archive retain historical source identity","verdict":"PASS"}
+{"check":"Logout clears private workspace","verdict":"PASS"}
+{"check":"Session expiry clears mounted private views","verdict":"PASS"}
+{"check":"Long incremental stream follows bottom, preserves paused reading and returns to latest","verdict":"PASS"}
+{"check":"Partial failure retry, cancellation and recovery","verdict":"PASS"}
+{"check":"429 cooldown preserves question and delays explicit retry","verdict":"PASS"}
+{"check":"Identical baseline long-answer fixture and viewport captures","verdict":"PASS"}

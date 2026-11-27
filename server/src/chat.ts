@@ -258,7 +258,9 @@ async function respond(req: express.Request, res: express.Response, reserved: { 
     else throw new HttpError(503, 'ANSWER_UNAVAILABLE', 'The saved reply is temporarily unavailable. Retry with the same request ID.');
   } finally {
     clearTimeout(opening); clearInterval(heartbeat); res.removeListener('close', disconnected);
-    if (streaming && !res.writableEnded) res.end();
+    // Before SSE headers are sent, let Express render a thrown HTTP error.
+    // Ending here would commit an empty 200 and hide the retryable failure.
+    if (streaming && started && !res.writableEnded) res.end();
   }
 }
 

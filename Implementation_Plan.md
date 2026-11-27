@@ -52,6 +52,7 @@ Use an isolated test environment for replay, fault injection, worker pauses and 
 | 05 · Grounded answers, streaming and citation viewing | A suggested question streams an answer whose claims can be checked in the original source. | [Run gate 05](qa/QA-05-grounded-answers-streaming-and-citation-viewing.md) |
 | 06 · Agreement comparison and support handoff | The customer can verify both sides of a change and copy a draft for an unresolved question. | [Run gate 06](qa/QA-06-agreement-comparison-and-support-handoff.md) |
 | 07 · Failure recovery, observability and accessibility | A failed or interrupted answer can be retried without losing the question, attachments or partial response. | [Run gate 07](qa/QA-07-failure-recovery-observability-and-accessibility.md) |
+| 7.2 · UI/UX redesign and frontend/backend code quality | The reviewed design works across the acceptance flows, audit findings are resolved or explicitly dispositioned, and earlier behavior remains verified. | [Run gate 7.2](qa/QA-07.2-design-and-code-quality.md) |
 | 08 · Hosted release and recorded acceptance | A reviewer can reproduce the application and follow the complete hosted demonstration. | [Run gate 08](qa/QA-08-hosted-release-and-recorded-acceptance.md) |
 
 ## Phase 01 · Foundation and account sessions
@@ -126,7 +127,23 @@ Use an isolated test environment for replay, fault injection, worker pauses and 
 
 **Review condition.** A failed or interrupted answer can be retried without losing the question, attachments or partial response. Complete the [phase 07 QA guide](qa/QA-07-failure-recovery-observability-and-accessibility.md).
 
+## Phase 7.2 · UI/UX redesign and frontend/backend code quality
+
+**Status: COMPLETE · 2026-11-27; phase gate ACCEPTED WITH USER WAIVER.** Anshul approved the [proposal](qa/phase07.2-design-proposal.md) on 2026-11-27, then amended its visual direction to a SaaS-style indigo/slate design the same day. The UI, the amendment and the audit fixes are implemented; build, type, 82 regression tests, 8 targeted browser tests and 18 comprehensive browser checks pass, as recorded in the [QA report](qa/phase07.2-qa-report.md) and [checkpoint](qa/phase07.2-checkpoint.json). Anshul waived the remaining manual screen-reader and native-zoom observations on 2026-11-27; this closes the gate without establishing screen-reader conformance. Phase 08 may proceed. This phase begins with critique and audit, followed by a design review with Anshul, implementation, and independent verification. The original entry authorized planning; the subsequent proposal approval is recorded in the linked design document. Implementation evidence and remaining gate observations are recorded in the phase QA report. See the [detailed execution plan](Phase_7.2_Plan.md).
+
+**Product scope.** Improve the existing customer and admin experience across the six PRD acceptance flows, and audit and remediate frontend and backend code quality. Preserve the PRD's fresh-chat behavior, owned history, conversation-scoped uploads, cited answers, Google A2UI comparison and copyable support draft. [PRD](Legal_Support_Chat_PRD.md) · [TRD](Legal_Support_Chat_TRD.md).
+
+1. Capture the running UI at a recorded revision on desktop and mobile, including long conversations and loading, empty, failure and recovery states. Produce a prioritized UI/UX critique with screenshots, affected tasks, design principles, proposed fixes and clear distinctions between observed problems and hypotheses.
+2. Run separate frontend and backend code audits in parallel. Record reproducible defects separately from maintainability concerns, with severity, file references, evidence, owner, proposed fix and validation. Inspect state races and cleanup, API boundaries, types, errors, module responsibilities, security, transactions, retries, worker leases, storage, retrieval and telemetry. Establish the existing build/test baseline and tooling gaps.
+3. Present a coherent design proposal: navigation, reading area, composer, uploads, comparison/source verification, admin flows, design tokens, component states and desktop/mobile mockups. Compare meaningful alternatives and agree on the direction with Anshul before changing the product UI.
+4. Implement the reviewed design and prioritized audit fixes in bounded increments using separate frontend and backend ownership. Extract modules where responsibilities justify it, improve boundary validation and error handling, and add proportionate static checks and targeted regression tests. Preserve existing route, persistence and evidence contracts unless a specific change and migration have been reviewed.
+5. Independently verify the integrated candidate against all six acceptance flows, frontend/backend audit closure and the phase 01–07 regressions. Recheck accessibility on the final UI, including the outstanding observed phase 07 walkthrough. Record before/after evidence and the exact tested revision before release advancement.
+
+**Entry and exit rules.** Audit and design work can start while the phase 07 accessibility observation is outstanding. Phase 7.2 does not waive that requirement: phase 08 remains blocked until phase 07 and 7.2 both pass. Existing phase 07 screenshots/scans do not establish acceptance of a redesigned UI. Follow the [phase 7.2 QA guide](qa/QA-07.2-design-and-code-quality.md) and the existing GitHub checkpoint procedure after PASS.
+
 ## Phase 08 · Hosted release and recorded acceptance
+
+**Prerequisites.** Phase 07 and the inserted phase 7.2 must both pass. Use the integrated, redesigned and audited candidate for deployment and recording.
 
 **Product scope.** Assignment and release requirements · handoff. Acceptance and demo 1–6. [PRD](Legal_Support_Chat_PRD.md) · [TRD §§7–9](Legal_Support_Chat_TRD.md)
 
@@ -147,4 +164,4 @@ Use an isolated test environment for replay, fault injection, worker pauses and 
 | 5. Admin replacement | 05 | Status transition, new citation, old superseded citation and denied customer mutation |
 | 6. Failed reply, throttling, logout and Compose | 08 | Recovery gate 07 plus clean Compose and hosted replay in gate 08 |
 
-Gate 08 repeats all six flows against the release candidate. Multi-tenancy, OCR, exhaustive redlining and email delivery remain deferred under the PRD and TRD.
+Gate 7.2 rechecks all six flows locally after redesign and refactoring; Compose and hosted checks remain in gate 08. Gate 08 repeats all six flows against the release candidate. Multi-tenancy, OCR, exhaustive redlining and email delivery remain deferred under the PRD and TRD.

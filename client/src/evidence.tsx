@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { validComparison } from './comparison';
+import type { Upload } from './uploads';
+import { CloseIcon, ExternalIcon, FileIcon } from './icons';
 export { validComparison } from './comparison';
 
 export type Citation = { id: string; versionId: string; passageId: string; quote: string; filename: string; page?: number; start?: number; end?: number };
@@ -14,37 +17,72 @@ type Source = { text: string; quote: string; filename: string; label: string; fi
 export function CitationLink({ citation, open }: { citation: Citation; open: (citation: Citation) => void }) {
   const [preview, setPreview] = useState(false);
   const previewId = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const previewElement = useRef<HTMLSpanElement>(null);
+  const dismissal = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 0, transform: '' });
+  function keepPreview() { clearTimeout(dismissal.current); }
+  function showPreview() {
+    keepPreview();
+    const anchor = button.current?.getBoundingClientRect();
+    if (!anchor) return;
+    const width = Math.min(360, innerWidth - 32);
+    const spaceAbove = Math.max(0, anchor.top - 22), spaceBelow = Math.max(0, innerHeight - anchor.bottom - 22);
+    const above = spaceAbove >= 240 || spaceAbove > spaceBelow;
+    // Anchor the actual box edge, rather than reserving maxHeight for a short quote.
+    setPosition({ top: above ? anchor.top - 6 : anchor.bottom + 6,
+      left: Math.max(16, Math.min(anchor.left, innerWidth - width - 16)), width,
+      maxHeight: Math.min(240, above ? spaceAbove : spaceBelow), transform: above ? 'translateY(-100%)' : '' });
+    setPreview(true);
+  }
+  function hidePreview() {
+    keepPreview(); dismissal.current = setTimeout(() => setPreview(false), 120);
+  }
+  useEffect(() => () => clearTimeout(dismissal.current), []);
   useEffect(() => {
     if (!preview) return;
     const dismiss = (event: KeyboardEvent) => { if (event.key === 'Escape') setPreview(false); };
+    const moved = (event: Event) => {
+      if (!previewElement.current?.contains(event.target as Node)) setPreview(false);
+    };
     document.addEventListener('keydown', dismiss);
-    return () => document.removeEventListener('keydown', dismiss);
+    document.addEventListener('scroll', moved, true);
+    window.addEventListener('resize', moved);
+    return () => { document.removeEventListener('keydown', dismiss); document.removeEventListener('scroll', moved, true); window.removeEventListener('resize', moved); };
   }, [preview]);
-  return <span className="citation-anchor" onMouseEnter={() => setPreview(true)} onMouseLeave={() => setPreview(false)}>
-    <button type="button" className="citation-button" aria-label={`View source: ${citation.filename}${citation.page ? `, page ${citation.page}` : ''}`}
-      aria-describedby={preview ? previewId : undefined} onFocus={() => setPreview(true)} onBlur={() => setPreview(false)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setPreview(false); } }} onClick={() => open(citation)}>
-      {citation.filename}{citation.page ? ` · p. ${citation.page}` : ''}
+  return <span className="citation-anchor" onMouseEnter={showPreview} onMouseLeave={hidePreview}>
+    <button ref={button} type="button" className="citation-button" aria-label={`View source: ${citation.filename}${citation.page ? `, page ${citation.page}` : ''}`}
+      aria-describedby={preview ? previewId : undefined} onFocus={showPreview} onBlur={() => setPreview(false)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setPreview(false); } }} onClick={() => open(citation)}>
+      <FileIcon size={13} /><span>{citation.filename}{citation.page ? ` · p. ${citation.page}` : ''}</span>
     </button>
-    {preview && <span className="citation-preview" id={previewId} role="tooltip">{citation.quote}</span>}
+    {preview && createPortal(<span ref={previewElement} className="citation-preview" id={previewId} role="tooltip"
+      style={{ position: 'fixed', bottom: 'auto', ...position }} onMouseEnter={keepPreview} onMouseLeave={hidePreview}>{citation.quote}</span>, document.body)}
   </span>;
 }
-function ClauseComparison({ surface, open }: { surface: Comparison; open: (citation: Citation) => void }) {
+type VersionIdentity = Pick<Upload, 'versionId' | 'filename' | 'revision'>;
+function ClauseComparison({ surface, open, versions = [] }: { surface: Comparison; open: (citation: Citation) => void; versions?: VersionIdentity[] }) {
   function side(value: Side, label: string) {
-    return <div className="comparison-side"><h4>{label}</h4>{value.missing ? <p>No matching evidence in this version.</p>
+    const version = versions.find(item => item.versionId === value.versionId);
+    // A missing row can still use another row's citation for the exact same pinned version.
+    const citation = surface.rows.flatMap(row => [row.left.citation, row.right.citation])
+      .find(item => item?.versionId === value.versionId);
+    const filename = version?.filename ?? citation?.filename;
+    return <div className="comparison-side"><p className="comparison-order">{label}</p>
+      <h4 className="comparison-identity">{filename ?? 'Document identity unavailable'}{version?.revision !== undefined ? ` · Revision ${version.revision}` : ''}</h4>{value.missing ? <p>No matching evidence in this version.</p>
       : value.citation ? <><blockquote>{value.citation.quote}</blockquote><CitationLink citation={value.citation} open={open} /></> : <p>Evidence unavailable.</p>}</div>;
   }
   return <section className="comparison" aria-label="Clause comparison"><h3>Agreement comparison</h3>
     {surface.rows.map((row, index) => <section className="comparison-row" key={index}><div className="comparison-term"><h4>{row.term}</h4><p>{row.finding}</p></div>
-      {side(row.left, 'First version')}{side(row.right, 'Second version')}</section>)}
+      {side(row.left, 'First document')}{side(row.right, 'Second document')}</section>)}
   </section>;
 }
 // The pinned catalog is intentionally closed: a model cannot register components.
 export const comparisonCatalog = Object.freeze({ ClauseComparison });
-export function ComparisonSurface({ surface, open }: { surface: Comparison; open: (citation: Citation) => void }) {
+export function ComparisonSurface({ surface, open, versions }: { surface: Comparison; open: (citation: Citation) => void; versions?: VersionIdentity[] }) {
   if (!validComparison(surface)) return <p role="alert">This comparison uses an unsupported or invalid component.</p>;
   const Renderer = comparisonCatalog.ClauseComparison;
   const component = (surface.messages![0] as { surfaceUpdate: { components: { component: { ClauseComparison: { rows: Comparison['rows'] } } }[] } }).surfaceUpdate.components[0].component.ClauseComparison;
-  return <Renderer surface={{ ...surface, rows: component.rows }} open={open} />;
+  return <Renderer surface={{ ...surface, rows: component.rows }} open={open} versions={versions} />;
 }
 
 export function SourceViewer({ citation, close, onSessionExpired }: { citation: Citation; close: () => void; onSessionExpired: () => void }) {
@@ -59,20 +97,22 @@ export function SourceViewer({ citation, close, onSessionExpired }: { citation: 
     void (async () => {
       try {
         const response = await fetch(`/sources/${encodeURIComponent(citation.versionId)}/passages/${encodeURIComponent(citation.passageId)}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+        if (controller.signal.aborted) return;
         if (response.status === 401) onSessionExpired();
         if (!response.ok) throw new Error('This source is unavailable or you no longer have access.');
-        setSource(await response.json());
+        const payload: Source = await response.json();
+        if (!controller.signal.aborted) setSource(payload);
       } catch (error) { if (!controller.signal.aborted) setProblem(error instanceof Error ? error.message : 'Could not open this source.'); }
     })();
     return () => { controller.abort(); prior?.focus(); };
   }, [citation.versionId, citation.passageId]);
   return <dialog ref={dialog} className="source-dialog" aria-labelledby="source-title" onCancel={close}>
-    <div className="source-heading"><h2 id="source-title">{source?.filename ?? citation.filename}</h2><button type="button" className="secondary" onClick={close} autoFocus>Close source</button></div>
+    <div className="source-heading"><span aria-hidden="true" className="file-icon"><FileIcon size={18} /></span><h2 id="source-title">{source?.filename ?? citation.filename}</h2><button type="button" className="ghost" onClick={close} autoFocus><CloseIcon />Close source</button></div>
     {problem && <p role="alert" className="error">{problem}</p>}
     {!source && !problem && <p role="status">Opening source…</p>}
-    {source && <><p>{source.label}{source.page ? ` · Page ${source.page}` : source.start !== undefined ? ` · Characters ${source.start}–${source.end}` : ''}</p>
+    {source && <><p className="source-meta">{source.label}{source.page ? ` · Page ${source.page}` : source.start !== undefined ? ` · Characters ${source.start}–${source.end}` : ''}</p>
       <h3>Exact cited passage</h3><blockquote><mark>{source.quote ?? source.text}</mark></blockquote>
-      <a href={source.fileUrl} target="_blank" rel="noopener">Open original{source.page ? ` at page ${source.page}` : ''}</a>
+      <a className="source-link" href={source.fileUrl} target="_blank" rel="noopener">Open original{source.page ? ` at page ${source.page}` : ''}<ExternalIcon size={14} /></a>
       <details open><summary>Readable source text</summary>{source.passages?.length ? source.passages.map(passage => <p key={passage.id}>
         {passage.page && <span className="source-page">Page {passage.page}: </span>}{passage.id === citation.passageId ? <mark>{passage.text}</mark> : passage.text}</p>) : <p>{source.text}</p>}</details>
     </>}

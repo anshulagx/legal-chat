@@ -1,0 +1,62 @@
+
+> legal-support-chat@0.0.0 test:phase07.2:browser
+> node --test scripts/phase07.2-frontend.test.mjs scripts/phase07.2-interactions.test.mjs scripts/phase07.2-evidence.test.mjs
+
+TAP version 13
+# Subtest: reopened comparison identifies missing sides by pinned version rather than row citations or list order
+ok 1 - reopened comparison identifies missing sides by pinned version rather than row citations or list order
+  ---
+  duration_ms: 7392.795834
+  type: 'test'
+  ...
+# Subtest: dismissing a loading source preserves the active chat and subsequent exact source
+ok 2 - dismissing a loading source preserves the active chat and subsequent exact source
+  ---
+  duration_ms: 4698.047
+  type: 'test'
+  ...
+# Subtest: citation previews escape transcript clipping, remain hoverable and dismiss with Escape
+ok 3 - citation previews escape transcript clipping, remain hoverable and dismiss with Escape
+  ---
+  duration_ms: 3746.215417
+  type: 'test'
+  ...
+# Subtest: file readiness announces transitions once while collapsed and does not repeat unchanged polling results
+ok 4 - file readiness announces transitions once while collapsed and does not repeat unchanged polling results
+  ---
+  duration_ms: 7525.530625
+  type: 'test'
+  ...
+# Subtest: short citation quote stays next to its anchor and remains reachable by a slow pointer
+ok 5 - short citation quote stays next to its anchor and remains reachable by a slow pointer
+  ---
+  duration_ms: 4054.434667
+  type: 'test'
+  ...
+# Subtest: indexing retry locks chat navigation until the originating attachment list is reconciled
+ok 6 - indexing retry locks chat navigation until the originating attachment list is reconciled
+  ---
+  duration_ms: 7293.900083
+  type: 'test'
+  ...
+# Subtest: older conversation list cannot overwrite the refresh after a new reply
+ok 7 - older conversation list cannot overwrite the refresh after a new reply
+  ---
+  duration_ms: 7779.438333
+  type: 'test'
+  ...
+# Subtest: old chat draft failure cannot appear in the new chat
+ok 8 - old chat draft failure cannot appear in the new chat
+  ---
+  duration_ms: 4285.29
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 27889.303417

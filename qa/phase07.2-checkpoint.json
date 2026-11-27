@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-27",
+  "baselineHead": "ba22082e3597fe4e2fb6ceef2260e096b738b399",
+  "candidate": "/private/tmp/legal-chat-phase072-independent-final-4052ln08",
+  "candidateKind": "clean copied source snapshot, not a committed Git revision; node_modules symlinked to workspace installation",
+  "manifestSha256": "d7b4d1c4b5661595133741809089a03354a4c1cad713e7a3f29289fa2569a63a",
+  "manifestFile": "qa/phase07.2-candidate-manifest.json",
+  "gate": "BLOCKED: observed screen-reader walkthrough and native browser 200% zoom evidence are missing; committed-clean-checkout/GitHub checkpoint remains pending",
+  "designReview": "APPROVED by Anshul 2026-11-27: lets implement the proposal",
+  "node": "22.22.0",
+  "chrome": "158.0.8127.37",
+  "playwrightCore": "1.65.1",
+  "axeCore": "4.10.3",
+  "build": "PASS",
+  "typecheck": "PASS",
+  "baselineTests": {
+    "pass": 81,
+    "fail": 0,
+    "historical": true
+  },
+  "independentFinalRegression": {
+    "pass": 82,
+    "fail": 0
+  },
+  "independentTargetedBrowser": {
+    "pass": 8,
+    "fail": 0
+  },
+  "independentComprehensiveBrowser": {
+    "pass": 18,
+    "fail": 0
+  },
+  "axe": {
+    "scans": 28,
+    "violations": 0,
+    "incompleteDisposition": "Three source color-contrast incomplete observations resolved using computed solid colors, measured contrast and visual inspection; raw records retained."
+  },
+  "dependencyAudit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "dependencies": {
+      "prod": 133,
+      "dev": 97,
+      "optional": 63,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 241
+    }
+  },
+  "limits": [
+    "Independent source snapshot is not a locally committed clean Git checkout; no new tested commit SHA or GitHub PASS checkpoint claimed.",
+    "Screen-reader walkthrough and native browser zoom not observed.",
+    "Reduced viewport emulates keyboard space only; no real mobile OS keyboard observation.",
+    "Deterministic fictional provider/storage/retrieval adapters; no hosted deployment, Compose or live provider quality assertion.",
+    "Actual browser upload transfer not replayed; phase03/04 integration fixtures verify upload/index/publication contracts.",
+    "Focused audit and representative task review, not exhaustive security review or human usability study."
+  ]
+}

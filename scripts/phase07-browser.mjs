@@ -46,7 +46,7 @@ try {
   await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({ state: 'detached' });
   assert.equal(await anchor.evaluate(element => element === document.activeElement), true); report.keyboard.push('Citation Enter opens source; Escape closes and returns focus; tooltip Escape dismisses.');
   const [adminName, adminValue] = app.admin.cookie.split('='); await context.addCookies([{ name: adminName, value: adminValue, url: app.base, httpOnly: true, sameSite: 'Lax' }]);
-  await page.reload(); await page.getByText('Manage shared documents', { exact: true }).click(); await page.getByRole('heading', { name: 'Shared documents' }).waitFor(); await scan('admin');
+  await page.reload(); await page.getByRole('button', { name: 'Shared documents', exact: true }).click(); await page.getByRole('heading', { name: 'Shared documents' }).waitFor(); await scan('admin');
   await context.close();
 
   const recovery = await setup({ after: fn => cleanup.push(fn) }, { fixture: './phase07-fixture.mjs' });

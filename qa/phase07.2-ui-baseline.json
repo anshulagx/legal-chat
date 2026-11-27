@@ -1,0 +1,55 @@
+{
+  "revision": "ba22082e3597fe4e2fb6ceef2260e096b738b399",
+  "fixture": "scripts/phase05-fixture.mjs",
+  "observations": [
+    {
+      "task": "Long answer composer reachability",
+      "viewport": 900,
+      "composerTop": 1323.59375,
+      "documentHeight": 1814,
+      "scrollY": 0
+    },
+    {
+      "task": "Reflow",
+      "width": 320,
+      "overflow": false,
+      "composerTop": 2302.375
+    },
+    {
+      "task": "Reflow",
+      "width": 390,
+      "overflow": false,
+      "composerTop": 1995.1875
+    },
+    {
+      "task": "Reflow",
+      "width": 768,
+      "overflow": false,
+      "composerTop": 1845.1875
+    },
+    {
+      "task": "Reflow",
+      "width": 1280,
+      "overflow": false,
+      "composerTop": 1323.59375
+    },
+    {
+      "task": "Mobile history Escape",
+      "expanded": "true",
+      "focus": "Previous chats"
+    },
+    {
+      "task": "Comparison identities",
+      "sideHeadings": [
+        "First version",
+        "Second version",
+        "First version",
+        "Second version"
+      ],
+      "pickerLabels": [
+        " fictional-original-agreement.txt",
+        " fictional-amendment.txt"
+      ]
+    }
+  ]
+}

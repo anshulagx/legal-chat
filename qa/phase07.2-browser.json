@@ -1,0 +1,979 @@
+{
+  "timestamp": "2026-11-27T05:54:03.134Z",
+  "candidate": "working tree with SaaS revamp; committed candidate verified separately",
+  "checks": [
+    {
+      "name": "Signup and login reflow, axe and keyboard order",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Fresh chat reflow and persistent composer",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Grounded answer and exact source with Escape focus return",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Closing a delayed source prevents stale dialog resurrection",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Absent evidence opt-in support draft and clipboard",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Reopened comparison identities, missing side and scope at all widths",
+      "verdict": "PASS"
+    },
+    {
+      "name": "File readiness, explicit document order and swap",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Mobile history native modal Escape and focus return",
+      "verdict": "PASS",
+      "detail": {
+        "focusSequence": [
+          {
+            "contained": true,
+            "body": false,
+            "name": "New chat",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "Compare these agreements",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "What is the notice period?",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": false,
+            "body": true,
+            "name": "\n    Legal Support ChatSupportAAccountSupport workspaceSigned in as a@example.testLog outPrevious ch",
+            "tag": "BODY"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "Close history",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "New chat",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "Compare these agreements",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "What is the notice period?",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": false,
+            "body": true,
+            "name": "\n    Legal Support ChatSupportAAccountSupport workspaceSigned in as a@example.testLog outPrevious ch",
+            "tag": "BODY"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "Close history",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "New chat",
+            "tag": "BUTTON"
+          },
+          {
+            "contained": true,
+            "body": false,
+            "name": "Compare these agreements",
+            "tag": "BUTTON"
+          }
+        ],
+        "note": "Native modal may focus document body between Tab cycles; no background control received focus."
+      }
+    },
+    {
+      "name": "Emulated small keyboard viewport keeps question controls reachable",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Customer isolation and admin denial",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Dedicated admin destination and reflow",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Policy replacement and archive retain historical source identity",
+      "verdict": "PASS",
+      "detail": "Fixture-seeded replacement publication; real archive endpoint; historical exact-source reads."
+    },
+    {
+      "name": "Logout clears private workspace",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Session expiry clears mounted private views",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Long incremental stream follows bottom, preserves paused reading and returns to latest",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Partial failure retry, cancellation and recovery",
+      "verdict": "PASS"
+    },
+    {
+      "name": "429 cooldown preserves question and delays explicit retry",
+      "verdict": "PASS"
+    },
+    {
+      "name": "Identical baseline long-answer fixture and viewport captures",
+      "verdict": "PASS",
+      "detail": "Matches /private/tmp/legal-chat-phase072-ui-review.mjs: ten-clause text, filename, question, 1280x900 and390x844. Reader positioned at top."
+    }
+  ],
+  "surfaces": [
+    {
+      "surface": "signup",
+      "width": 320,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "signup",
+      "width": 390,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "signup",
+      "width": 768,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(1)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(2)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(3)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-footnote"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "signup",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(1)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(2)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(3)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-footnote"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "login",
+      "width": 320,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "login",
+      "width": 390,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "login",
+      "width": 768,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(1)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(2)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(3)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-footnote"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "login",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                ".brand"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-title"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(1)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(2)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                "li:nth-child(3)"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            },
+            {
+              "target": [
+                ".cover-footnote"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": []
+    },
+    {
+      "surface": "fresh",
+      "width": 320,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "fresh",
+      "width": 390,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "fresh",
+      "width": 768,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "fresh",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "source",
+      "width": 320,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                "blockquote > mark"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": [
+        {
+          "tag": "P",
+          "foreground": "rgb(93, 102, 121)",
+          "background": "rgb(255, 255, 255)",
+          "text": "Current · Characters 0–55"
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        }
+      ]
+    },
+    {
+      "surface": "source",
+      "width": 390,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            {
+              "target": [
+                "blockquote > mark"
+              ],
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+            }
+          ]
+        }
+      ],
+      "contrastInspection": [
+        {
+          "tag": "P",
+          "foreground": "rgb(93, 102, 121)",
+          "background": "rgb(255, 255, 255)",
+          "text": "Current · Characters 0–55"
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        }
+      ]
+    },
+    {
+      "surface": "source",
+      "width": 768,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": [
+        {
+          "tag": "P",
+          "foreground": "rgb(93, 102, 121)",
+          "background": "rgb(255, 255, 255)",
+          "text": "Current · Characters 0–55"
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        }
+      ]
+    },
+    {
+      "surface": "source",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": [
+        {
+          "tag": "P",
+          "foreground": "rgb(93, 102, 121)",
+          "background": "rgb(255, 255, 255)",
+          "text": "Current · Characters 0–55"
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        },
+        {
+          "tag": "MARK",
+          "foreground": "rgb(16, 24, 40)",
+          "background": "rgb(254, 240, 138)",
+          "text": "Fictional support policy: the notice period is 30 days."
+        }
+      ]
+    },
+    {
+      "surface": "comparison",
+      "width": 320,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "comparison",
+      "width": 390,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "comparison",
+      "width": 768,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "comparison",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "files",
+      "width": 320,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "files",
+      "width": 390,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "files",
+      "width": 768,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "files",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "admin",
+      "width": 320,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "admin",
+      "width": 390,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "admin",
+      "width": 768,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    },
+    {
+      "surface": "admin",
+      "width": 1280,
+      "violations": [],
+      "incomplete": [],
+      "contrastInspection": []
+    }
+  ],
+  "viewports": [
+    {
+      "surface": "signup",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "signup",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "signup",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "signup",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "login",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "login",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "login",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "login",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": null
+    },
+    {
+      "surface": "fresh",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 722.8125,
+        "bottom": 844.8125,
+        "height": 900
+      }
+    },
+    {
+      "surface": "fresh",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 741.40625,
+        "bottom": 863.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "fresh",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 733.40625,
+        "bottom": 859.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "fresh",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 733.40625,
+        "bottom": 859.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "source",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 722.8125,
+        "bottom": 844.8125,
+        "height": 900
+      }
+    },
+    {
+      "surface": "source",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 741.40625,
+        "bottom": 863.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "source",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 733.40625,
+        "bottom": 859.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "source",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 733.40625,
+        "bottom": 859.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "comparison",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 722.8125,
+        "bottom": 844.8125,
+        "height": 900
+      }
+    },
+    {
+      "surface": "comparison",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 741.40625,
+        "bottom": 863.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "comparison",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 733.40625,
+        "bottom": 859.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "comparison",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 733.40625,
+        "bottom": 859.40625,
+        "height": 900
+      }
+    },
+    {
+      "surface": "files",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 1292.296875,
+        "bottom": 1414.296875,
+        "height": 900
+      }
+    },
+    {
+      "surface": "files",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 1163.09375,
+        "bottom": 1285.09375,
+        "height": 900
+      }
+    },
+    {
+      "surface": "files",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 1186.046875,
+        "bottom": 1312.046875,
+        "height": 900
+      }
+    },
+    {
+      "surface": "files",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 1142.671875,
+        "bottom": 1268.671875,
+        "height": 900
+      }
+    },
+    {
+      "surface": "admin",
+      "width": 320,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 0,
+        "bottom": 0,
+        "height": 900
+      }
+    },
+    {
+      "surface": "admin",
+      "width": 390,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 0,
+        "bottom": 0,
+        "height": 900
+      }
+    },
+    {
+      "surface": "admin",
+      "width": 768,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 0,
+        "bottom": 0,
+        "height": 900
+      }
+    },
+    {
+      "surface": "admin",
+      "width": 1280,
+      "overflow": false,
+      "bodyOverflow": false,
+      "composer": {
+        "top": 0,
+        "bottom": 0,
+        "height": 900
+      }
+    }
+  ],
+  "limitations": [
+    "Headless Chrome and deterministic fictional adapters do not establish hosted-provider behavior.",
+    "Observed screen-reader walkthrough: BLOCKED; requires a real assistive technology operator.",
+    "Native browser 200% zoom: BLOCKED; CSS zoom and device scaling are not substitutes.",
+    "Mobile keyboard: viewport resize emulation only, not a real OS keyboard observation."
+  ]
+}

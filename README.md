@@ -531,3 +531,56 @@ zoom and observed screen-reader walkthrough in the
 Run `node --env-file=.env scripts/phase07-live-telemetry.mjs` for two fictional,
 content-free Cloud trace exports/readbacks; it does not call a chat model.
 See [phase 07 evidence and remaining gate checks](qa/phase07-qa-report.md).
+
+## Phase 7.2 · Support workspace redesign and code quality
+
+The [approved proposal](qa/phase07.2-design-proposal.md) is implemented in the
+support workspace: a scrolling answer column with a persistent composer, a
+mobile history dialog, explicit comparison document identities/order, compact
+file readiness controls, and a dedicated Shared documents destination for admins.
+The chat stays mounted when opening admin management. Account details live in
+one header menu; source inspection remains a native modal.
+
+New replies follow the transcript only while the reader is near the bottom.
+Scrolling upward pauses following; **Latest answer** returns to the stream.
+Files stay in their chat. Open **Attach files** to upload, inspect readiness,
+choose two ready versions, swap their order, or download fictional sample files.
+Queued and failed files are summarized beside the question. File/reply operations
+pause conflicting navigation. Failed replies preserve the question and partial
+answer and offer the existing retry/cooldown behavior.
+
+The focused audit also fixed out-of-order history refreshes, old draft feedback
+after navigation, indexing retries reloading the wrong attachment context,
+clipped citation previews and HTTP error status before SSE starts. No storage,
+database schema, retrieval or A2UI catalog migration is introduced.
+
+Use Node 22+ and a disposable Mongo replica set. For example, the current QA
+session uses port 27029 with replica-set name `legalChatQA072`; substitute your
+own isolated replica-set URI if using the setup above.
+
+```sh
+export QA_MONGODB_URI='mongodb://127.0.0.1:27029/?replicaSet=legalChatQA072'
+npm run typecheck
+npm run build
+npm run test:phase07.2
+# Point to an optional playwright-core index.mjs and axe-core/axe.min.js installation.
+export QA_PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs
+export QA_AXE_PATH=/absolute/path/to/axe-core/axe.min.js
+npm run test:phase07.2:browser
+npm run qa:phase07.2
+```
+
+Browser commands also accept `QA_CHROME_PATH` and default to the installed macOS
+Google Chrome binary. `qa:phase07.2` writes after screenshots and structured
+observations to `qa/` (override with `QA_OUTPUT_DIR`), using fictional fixture
+accounts and isolated databases. CSP bypass is restricted to the scanner browser
+context, for axe injection. Test-only faults remain guarded by `NODE_ENV=test`;
+no production fault endpoint is added.
+
+The existing phase 01–07 suites remain required. `npm run typecheck` checks both
+projects without emitting build files; `npm audit --json` queries advisory data
+when the registry is reachable. Neither proves functional or accessibility
+acceptance. See [the QA report](qa/phase07.2-qa-report.md) for actual results,
+candidate identity and outstanding observations. The original
+[mockups](qa/phase07.2-mockups.html) remain design references, not implementation
+screenshots. Hosting, Compose and recording remain phase 08.

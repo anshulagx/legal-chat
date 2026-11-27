@@ -1,16 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
+import { FileIcon } from './icons';
 
 export type Upload = { uploadId: string; versionId: string; documentId: string; filename: string; size: number; status: string; indexingStatus?: string; revision?: number; isActive?: boolean; archivedAt?: string | null; failureReason?: string; form?: { url: string; fields: Record<string, string> } };
 type Pending = { file: File; clientUploadId: string; conversationId?: string; targetDocumentId?: string; reservation?: Upload; reconcile: boolean };
+const labels: Record<string, string> = { reserved: 'Waiting for upload', queued: 'Queued for processing', indexing: 'Indexing', ready: 'Ready', failed: 'Failed', expired: 'Expired' };
+function stateLabel(item: Upload) {
+  if (item.status === 'ready' && item.indexingStatus === 'indexing') return 'Ready; rebuilding search';
+  if (item.status === 'ready' && item.indexingStatus === 'failed') return 'Ready; search rebuild failed';
+  return labels[item.status] ?? item.status;
+}
+function stateTone(item: Upload) {
+  if (item.status === 'failed' || item.status === 'expired' || item.indexingStatus === 'failed') return 'error';
+  return item.status === 'ready' && item.indexingStatus !== 'indexing' ? 'success' : 'warning';
+}
 class ApiError extends Error { constructor(message: string, readonly code: string) { super(message); } }
 
-export function UploadPanel({ conversationId, ensureConversation, onChanged, onBusy, onSessionExpired, shared = false, disabled = false, onVersions }: {
+export function UploadPanel({ conversationId, ensureConversation, onChanged, onBusy, onSessionExpired, shared = false, disabled = false, onVersions, onProblem, onStatusChange }: {
   conversationId?: string; ensureConversation?: () => Promise<string>; onChanged?: () => void;
-  onBusy?: (busy: boolean) => void; onVersions?: (items: Upload[]) => void; onSessionExpired: () => void; shared?: boolean; disabled?: boolean;
+  onBusy?: (busy: boolean) => void; onVersions?: (items: Upload[]) => void; onProblem?: () => void; onStatusChange?: (text: string) => void; onSessionExpired: () => void; shared?: boolean; disabled?: boolean;
 }) {
   const [items, setItems] = useState<Upload[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [activity, setActivity] = useState<'upload' | 'retry' | 'archive'>('upload');
+  const [announcement, setAnnouncement] = useState('');
+  const announcedStates = useRef(new Map<string, string>());
   const [problem, setProblem] = useState('');
   const [retry, setRetry] = useState(false);
   const [replacement, setReplacement] = useState<string>();
@@ -37,14 +51,22 @@ export function UploadPanel({ conversationId, ensureConversation, onChanged, onB
     if (!shared && !id) { setItems([]); onVersions?.([]); return; }
     try {
       const response = await request<{ items: Upload[] }>(path(id));
-      if (!lifetime.current.signal.aborted && generation === listGeneration.current) { setItems(response.items); onVersions?.(response.items); }
+      if (!lifetime.current.signal.aborted && generation === listGeneration.current) {
+        const changed = response.items.filter(item => announcedStates.current.get(item.versionId) !== stateLabel(item));
+        for (const item of response.items) announcedStates.current.set(item.versionId, stateLabel(item));
+        if (changed.length) {
+          const text = changed.map(item => `${item.filename}: ${stateLabel(item)}.`).join(' ');
+          setAnnouncement(text); onStatusChange?.(text);
+        }
+        setItems(response.items); onVersions?.(response.items);
+      }
     } catch (error) {
-      if (!lifetime.current.signal.aborted && generation === listGeneration.current) setProblem(error instanceof Error ? error.message : 'Could not load files.');
+      if (!lifetime.current.signal.aborted && generation === listGeneration.current) { setProblem(error instanceof Error ? error.message : 'Could not load files.'); onProblem?.(); }
     }
   }
   useEffect(() => {
     if (!active.current) { pending.current = undefined; setRetry(false); setProblem(''); }
-    setItems([]);
+    setItems([]); setAnnouncement(''); announcedStates.current.clear();
     void load();
   }, [conversationId, shared]);
   useEffect(() => {
@@ -74,7 +96,7 @@ export function UploadPanel({ conversationId, ensureConversation, onChanged, onB
     const current = pending.current;
     if (!current || active.current) return;
     active.current = true;
-    setBusy(true); onBusy?.(true); setProblem(''); setProgress(0);
+    setBusy(true); setActivity('upload'); onBusy?.(true); setProblem(''); setProgress(0);
     try {
       if (!shared && !current.conversationId) current.conversationId = conversationId ?? await ensureConversation!();
       if (!current.reservation) current.reservation = await request<Upload>(path(current.conversationId, current.targetDocumentId), {
@@ -107,7 +129,7 @@ export function UploadPanel({ conversationId, ensureConversation, onChanged, onB
       await load(current.conversationId);
       onChanged?.();
     } catch (error) {
-      if (!lifetime.current.signal.aborted) { setProblem(error instanceof Error ? error.message : 'The upload could not be completed.'); setRetry(true); }
+      if (!lifetime.current.signal.aborted) { setProblem(error instanceof Error ? error.message : 'The upload could not be completed.'); setRetry(true); onProblem?.(); }
     } finally {
       active.current = false;
       if (!lifetime.current.signal.aborted) { setBusy(false); onBusy?.(false); }
@@ -117,42 +139,52 @@ export function UploadPanel({ conversationId, ensureConversation, onChanged, onB
     if (!file || active.current || disabled) return;
     const mime = file.type || (file.name.toLowerCase().endsWith('.txt') ? 'text/plain' : file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
     if (!file.size || file.size > 5 * 1024 * 1024 || !['application/pdf', 'text/plain'].includes(mime)) {
-      setProblem('Choose a nonempty PDF or plain text file of at most 5 MiB.'); return;
+      setProblem('Choose a nonempty PDF or plain text file of at most 5 MiB.'); onProblem?.(); return;
     }
     pending.current = { file, clientUploadId: crypto.randomUUID(), conversationId, targetDocumentId: replacement, reconcile: false };
     setRetry(false);
     void perform();
   }
   async function action(item: Upload, kind: 'retry' | 'archive') {
-    if (active.current) return;
-    active.current = true; setBusy(true); setProblem('');
+    if (active.current || disabled) return;
+    const generation = listGeneration.current;
+    active.current = true; setBusy(true); setActivity(kind); onBusy?.(true); setProblem('');
     try {
       if (kind === 'archive') await request(`/admin/documents/${item.documentId}`, undefined, 'DELETE');
       else await request(shared ? `/admin/document-versions/${item.versionId}/retry` : `/conversations/${conversationId}/attachments/${item.versionId}/retry`, {});
-      await load();
-    } catch (error) { if (!lifetime.current.signal.aborted) setProblem(error instanceof Error ? error.message : 'The action could not be completed.'); }
-    finally { active.current = false; if (!lifetime.current.signal.aborted) setBusy(false); }
+      if (!lifetime.current.signal.aborted && generation === listGeneration.current) await load();
+    } catch (error) { if (!lifetime.current.signal.aborted && generation === listGeneration.current) { setProblem(error instanceof Error ? error.message : 'The action could not be completed.'); onProblem?.(); } }
+    finally { active.current = false; if (!lifetime.current.signal.aborted) { setBusy(false); onBusy?.(false); } }
   }
-  const labels: Record<string, string> = { reserved: 'Waiting for upload', queued: 'Queued for processing', indexing: 'Indexing', ready: 'Ready', failed: 'Failed', expired: 'Expired' };
   return <section className="upload-panel" aria-label={shared ? 'Shared documents' : 'Chat files'}>
-    <h2>{shared ? 'Shared documents' : 'Files in this chat'}</h2>
-    <p>{shared ? 'Add a support document for the shared knowledge base.' : 'Attach up to five PDF or text files, each at most 5 MiB.'}</p>
-    {shared && replacement && <p>Uploading a replacement. The current published revision stays available until this file is ready.
+    <h2>{shared ? 'Document library' : 'Files in this chat'}</h2>
+    <p className="panel-description">{shared ? 'Shared knowledge is available across customer chats. Add a PDF or text file, at most 5 MiB.' : 'Files are available only in this chat. Up to five PDF or text files, each at most 5 MiB.'}</p>
+    {!onStatusChange && <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>}
+    {shared && replacement && <p className="notice">Replacing {items.find(item => item.documentId === replacement)?.filename ?? 'the selected document'}. The current published revision stays available until this file is ready.
       <button type="button" className="secondary" disabled={busy} onClick={() => setReplacement(undefined)}>Add a separate document instead</button></p>}
-    <label htmlFor={shared ? 'shared-file' : 'chat-file'}>{shared ? replacement ? 'Upload replacement' : 'Add shared document' : 'Attach a file'}</label>
-    <input ref={input} id={shared ? 'shared-file' : 'chat-file'} type="file" accept="application/pdf,text/plain,.pdf,.txt" disabled={busy || disabled}
+    <label className="dropzone-label" htmlFor={shared ? 'shared-file' : 'chat-file'}>{shared ? replacement ? 'Upload replacement' : 'Add shared document' : 'Attach a file'}</label>
+    <input className="dropzone" ref={input} id={shared ? 'shared-file' : 'chat-file'} type="file" accept="application/pdf,text/plain,.pdf,.txt" disabled={busy || disabled}
       onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; choose(file); }} />
-    {busy && <div role="status"><p>Uploading file… {progress}%</p><progress max={100} value={progress} aria-label="File upload progress" /></div>}
+    {busy && <div role="status">{activity === 'upload' ? <><p>Uploading file… {progress}%</p><progress max={100} value={progress} aria-label="File upload progress" /></> : <p>{activity === 'archive' ? 'Archiving document…' : 'Retrying document processing…'}</p>}</div>}
     {problem && <p className="error" role="alert">{problem}</p>}
     {retry && <button type="button" className="secondary" disabled={busy || disabled} onClick={() => void perform()}>Retry upload</button>}
-    <ul>{items.map(item => <li key={item.uploadId}><strong>{item.filename}</strong> · {labels[item.status] ?? item.status}
-      {shared && <> · Revision {item.revision ?? 1}{item.isActive ? ' · Published' : ''}{item.archivedAt ? ' · Archived' : ''}</>}
-      {item.status === 'ready' && item.indexingStatus === 'indexing' && !item.archivedAt && <p>Rebuilding search while the published search version stays available.</p>}
-      {item.failureReason && <p>{item.failureReason}</p>}
-      {(item.status === 'failed' || item.indexingStatus === 'failed') && !item.archivedAt && <button type="button" className="secondary" disabled={busy} onClick={() => void action(item, 'retry')}>Retry indexing</button>}
-      {shared && !item.archivedAt && <><button type="button" className="secondary" disabled={busy} onClick={() => { setReplacement(item.documentId); input.current?.focus(); }}>Replace document</button>
-        <button type="button" className="secondary" disabled={busy} onClick={() => void action(item, 'archive')}>Archive document</button></>}
-      </li>)}</ul>
-    <p className="fixture-links">Fictional examples: <a href="/fixtures/agreement.pdf" download>Agreement (30 days)</a> · <a href="/fixtures/amendment.txt" download>Amendment (60 days)</a></p>
+    {Boolean(items.length) && <ul className="upload-list">{items.map(item => <li className="upload-item" key={item.uploadId}>
+      <span aria-hidden="true" className="file-icon"><FileIcon size={18} /></span>
+      <div className="upload-details">
+        <strong>{item.filename}</strong>
+        <div className="upload-meta"><span className={`badge badge-${stateTone(item)} upload-state`}>{stateLabel(item)}</span>
+          {item.revision !== undefined && <span>Revision {item.revision}</span>}
+          {shared && item.isActive && <span className="badge badge-accent">Published</span>}
+          {shared && item.archivedAt && <span className="badge">Archived</span>}</div>
+        {item.status === 'ready' && item.indexingStatus === 'indexing' && !item.archivedAt && <p className="upload-note">Rebuilding search while the published search version stays available.</p>}
+        {item.failureReason && <p className="upload-note error">{item.failureReason}</p>}
+      </div>
+      <div className="upload-actions">
+        {(item.status === 'failed' || item.indexingStatus === 'failed') && !item.archivedAt && <button type="button" className="secondary" disabled={busy || disabled} onClick={() => void action(item, 'retry')}>Retry indexing</button>}
+        {shared && !item.archivedAt && <><button type="button" className="secondary" disabled={busy || disabled} onClick={() => { setReplacement(item.documentId); input.current?.focus(); }}>Replace document</button>
+          <button type="button" className="ghost danger" disabled={busy || disabled} onClick={() => void action(item, 'archive')}>Archive document</button></>}
+      </div>
+      </li>)}</ul>}
+    <details className="sample-files"><summary>Try sample files</summary><p className="fixture-links">Fictional examples: <a href="/fixtures/agreement.pdf" download>Agreement (30 days)</a> · <a href="/fixtures/amendment.txt" download>Amendment (60 days)</a></p></details>
   </section>;
 }

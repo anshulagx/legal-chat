@@ -19,7 +19,11 @@
     "bootstrap": "node --env-file=.env scripts/bootstrap.mjs",
     "test:wave-05": "node --test scripts/phase05.test.mjs scripts/client-stream.test.mjs scripts/grounding.test.mjs",
     "test:wave-06": "node --test scripts/phase06.test.mjs",
-    "test:wave-07": "node --test scripts/phase07.test.mjs scripts/phase07-telemetry.test.mjs"
+    "test:wave-07": "node --test scripts/phase07.test.mjs scripts/phase07-telemetry.test.mjs",
+    "typecheck": "tsc --noEmit -p client/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "test:phase07.2": "node --test scripts/phase07.2-backend.test.mjs",
+    "test:phase07.2:browser": "node --test scripts/phase07.2-frontend.test.mjs scripts/phase07.2-interactions.test.mjs scripts/phase07.2-evidence.test.mjs",
+    "qa:phase07.2": "node scripts/phase07.2-browser.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
