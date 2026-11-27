@@ -1,64 +1,42 @@
 {
   "date": "2026-11-27",
   "baselineHead": "ba22082e3597fe4e2fb6ceef2260e096b738b399",
-  "candidate": "/private/tmp/legal-chat-phase072-independent-final-4052ln08",
-  "candidateKind": "clean copied source snapshot, not a committed Git revision; node_modules symlinked to workspace installation",
-  "manifestSha256": "d7b4d1c4b5661595133741809089a03354a4c1cad713e7a3f29289fa2569a63a",
+  "testedCommit": "1db726bdf377362ddfcd3e5de6d129be6c8dd36f",
+  "candidateKind": "git archive of the tested commit extracted to /tmp/legal-chat-phase072-clean-1db726b; node_modules symlinked to the workspace installation",
+  "manifestSha256": "e540abfa15f49180830bb463cf12306532c6eb8b4f88ced93d6efb123a9feae3",
   "manifestFile": "qa/phase07.2-candidate-manifest.json",
-  "gate": "BLOCKED: observed screen-reader walkthrough and native browser 200% zoom evidence are missing; committed-clean-checkout/GitHub checkpoint remains pending",
-  "designReview": "APPROVED by Anshul 2026-11-27: lets implement the proposal",
+  "gate": "ACCEPTED WITH USER WAIVER: automated checks PASS; observed screen-reader walkthrough and native browser 200% zoom waived by Anshul on 2026-11-27",
+  "designReview": "APPROVED by Anshul 2026-11-27 (lets implement the proposal); visual amendment requested by Anshul 2026-11-27 (UI revamp to look more like a SaaS prod application)",
+  "github": {
+    "remote": "https://github.com/anshulagx/legal-chat.git",
+    "branch": "codex/phase07-recovery",
+    "link": "https://github.com/anshulagx/legal-chat/tree/codex/phase07-recovery",
+    "verifiedRemoteSha": "1db726bdf377362ddfcd3e5de6d129be6c8dd36f",
+    "matchesTestedCommit": true,
+    "verdict": "PASS"
+  },
   "node": "22.22.0",
   "chrome": "158.0.8127.37",
   "playwrightCore": "1.65.1",
   "axeCore": "4.10.3",
-  "build": "PASS",
-  "typecheck": "PASS",
-  "baselineTests": {
-    "pass": 81,
-    "fail": 0,
-    "historical": true
+  "cleanCheckout": {
+    "build": "PASS",
+    "typecheck": "PASS",
+    "regression": { "pass": 82, "fail": 0 },
+    "targetedBrowser": { "pass": 8, "fail": 0 },
+    "comprehensiveBrowser": { "pass": 18, "fail": 0 },
+    "axe": { "scans": 28, "violations": 0, "horizontalOverflow": 0 },
+    "bundle": { "js": "268.23 kB (82.46 kB gzip)", "css": "34.91 kB (8.13 kB gzip)" }
   },
-  "independentFinalRegression": {
-    "pass": 82,
-    "fail": 0
-  },
-  "independentTargetedBrowser": {
-    "pass": 8,
-    "fail": 0
-  },
-  "independentComprehensiveBrowser": {
-    "pass": 18,
-    "fail": 0
-  },
-  "axe": {
-    "scans": 28,
-    "violations": 0,
-    "incompleteDisposition": "Three source color-contrast incomplete observations resolved using computed solid colors, measured contrast and visual inspection; raw records retained."
-  },
+  "axeIncompleteDisposition": "Auth cover gradient text resolved by worst-case contrast against the lightest stop (>= 5.10:1); source quote mark overlap under the sticky dialog header resolved by computed contrast (15.25:1) and visual inspection; raw records retained in phase07.2-browser.json.",
   "dependencyAudit": {
-    "vulnerabilities": {
-      "info": 0,
-      "low": 0,
-      "moderate": 0,
-      "high": 0,
-      "critical": 0,
-      "total": 0
-    },
-    "dependencies": {
-      "prod": 133,
-      "dev": 97,
-      "optional": 63,
-      "peer": 0,
-      "peerOptional": 0,
-      "total": 241
-    }
+    "vulnerabilities": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0 },
+    "dependencies": { "prod": 133, "dev": 97, "optional": 63, "peer": 0, "peerOptional": 0, "total": 241 }
   },
   "limits": [
-    "Independent source snapshot is not a locally committed clean Git checkout; no new tested commit SHA or GitHub PASS checkpoint claimed.",
-    "Screen-reader walkthrough and native browser zoom not observed.",
+    "Screen-reader walkthrough and native browser zoom waived, not observed.",
+    "Visual amendment implemented and verified by the same agent; earlier independent reviews cover the audit fixes and original redesign.",
     "Reduced viewport emulates keyboard space only; no real mobile OS keyboard observation.",
-    "Deterministic fictional provider/storage/retrieval adapters; no hosted deployment, Compose or live provider quality assertion.",
-    "Actual browser upload transfer not replayed; phase03/04 integration fixtures verify upload/index/publication contracts.",
-    "Focused audit and representative task review, not exhaustive security review or human usability study."
+    "Deterministic fictional provider/storage/retrieval adapters; no hosted deployment, Compose or live provider quality assertion."
   ]
 }

@@ -1,6 +1,6 @@
 # Phase 7.2 QA report
 
-Date: 2026-11-27. **Phase gate: ACCEPTED WITH USER WAIVER.** Implementation, design amendment and all automated checks PASS on the final candidate. On 2026-11-27 Anshul explicitly chose to record a waiver for the remaining manual observations (observed screen-reader walkthrough and native browser 200% zoom) and close the phase. The waiver removes the acceptance blocker; it does not establish screen-reader behavior or full WCAG conformance. Tested commit, clean-checkout result and GitHub checkpoint: [checkpoint record](phase07.2-checkpoint.json).
+Date: 2026-11-27. **Phase gate: ACCEPTED WITH USER WAIVER.** Implementation, design amendment and all automated checks PASS on the final candidate. On 2026-11-27 Anshul explicitly chose to record a waiver for the remaining manual observations (observed screen-reader walkthrough and native browser 200% zoom) and close the phase. The waiver removes the acceptance blocker; it does not establish screen-reader behavior or full WCAG conformance. **Tested commit `1db726bdf377362ddfcd3e5de6d129be6c8dd36f`**, rebuilt from a clean `git archive` export: build, typecheck, 82/82 regression, 8/8 targeted browser and 18/18 comprehensive checks pass, with 28 axe scans showing zero violations and no horizontal overflow. GitHub checkpoint PASS: branch [`codex/phase07-recovery`](https://github.com/anshulagx/legal-chat/tree/codex/phase07-recovery) verified at the same SHA. Details: [checkpoint record](phase07.2-checkpoint.json).
 
 ## Design review and amendment
 
@@ -76,4 +76,4 @@ npm run test:phase07.2:browser
 npm run qa:phase07.2
 ```
 
-Build output: 268.23 kB JavaScript (82.46 kB gzip) and 34.83 kB CSS (8.11 kB gzip). Sizes are measurements, not a performance benchmark.
+Clean-checkout build output: 268.23 kB JavaScript (82.46 kB gzip) and 34.91 kB CSS (8.13 kB gzip). Sizes are measurements, not a performance benchmark.
