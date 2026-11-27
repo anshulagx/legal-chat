@@ -1,7 +1,7 @@
 # Legal Support Chat
 
 - **Hosted app:** <https://legal-chat-wuxo.onrender.com> (free Render instance; the first request after idle can take about a minute)
-- **Demo video:** _link added after recording_
+- **Demo video:** [docs/demo.mp4](docs/demo.mp4) (8 min, narrated walkthrough of the six acceptance scenes)
 - **Repository:** <https://github.com/anshulagx/legal-chat>
 
 ## Quick start with Docker Compose
